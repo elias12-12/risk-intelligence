@@ -1,0 +1,28 @@
+[project]
+name = "glassbox"
+version = "0.2.0"
+description = "GlassBox — an additive, explainable risk decisioning engine"
+requires-python = ">=3.11"
+dependencies = [
+    "psycopg[binary]>=3.1",
+    "pydantic>=2.6",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[project.scripts]
+glassbox = "glassbox.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

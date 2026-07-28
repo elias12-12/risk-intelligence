@@ -1,0 +1,120 @@
+{
+  "_comment": [
+    "Expectations for the planted fixtures, read by tests/ and mirrored in",
+    "db/acceptance/verify_scores.sql. These are OUTCOMES of the engine, not",
+    "inputs to it: the generator writes raw rows only, the feature runner",
+    "computes every value from the catalog, and the numbers below are what",
+    "that produces. If one changes, either a rule changed or something broke —",
+    "there is no third possibility, which is the point of pinning them here.",
+    "",
+    "TXN-48300 is the fifth fixture, added because §7's acceptance criterion",
+    "('a veto rule scoring 31 caps a score of 87 at monitor') names two",
+    "DIFFERENT subjects and cannot pass without an engine that reaches across",
+    "evaluations, which would be wrong. See judgment call 1."
+  ],
+  "reference_now": "2026-01-15T15:00:00+00:00",
+  "cases": [
+    {
+      "name": "card-not-present burst",
+      "rule_id": "R-114",
+      "subject_type": "transaction",
+      "subject_id": "TXN-48291",
+      "lane": "inline_sync",
+      "score": 87,
+      "band": "high",
+      "action": "challenge",
+      "alert_expected": true,
+      "vetoed_by": null,
+      "signals": [
+        {"feature_key": "card_cnp_count", "contribution": 34},
+        {"feature_key": "device_first_seen_min", "contribution": 21},
+        {"feature_key": "session_geo_jump_km", "contribution": 18},
+        {"feature_key": "mcc_is_new_for_customer", "contribution": 14}
+      ]
+    },
+    {
+      "name": "mule ring",
+      "rule_id": "L-203",
+      "subject_type": "network",
+      "subject_id": "RING-1187",
+      "lane": "async",
+      "score": 64,
+      "band": "elevated",
+      "action": "hold",
+      "alert_expected": true,
+      "vetoed_by": null,
+      "signals": [
+        {"feature_key": "accounts_per_device", "contribution": 22},
+        {"feature_key": "structuring_flag", "contribution": 17},
+        {"feature_key": "pass_through_ratio", "contribution": 15},
+        {"feature_key": "activity_is_passthrough_only", "contribution": 10}
+      ]
+    },
+    {
+      "name": "account takeover",
+      "rule_id": "S-077",
+      "subject_type": "account",
+      "subject_id": "ACC-2201",
+      "lane": "async",
+      "score": 58,
+      "band": "elevated",
+      "action": "hold",
+      "alert_expected": true,
+      "vetoed_by": null,
+      "signals": [
+        {"feature_key": "min_since_password_reset", "contribution": 19},
+        {"feature_key": "new_payee_then_drain", "contribution": 18},
+        {"feature_key": "ip_is_datacenter", "contribution": 13},
+        {"feature_key": "amount_over_avail_balance_pct", "contribution": 8}
+      ]
+    },
+    {
+      "name": "travel false positive",
+      "rule_id": "T-021",
+      "subject_type": "transaction",
+      "subject_id": "TXN-48251",
+      "lane": "inline_sync",
+      "score": 31,
+      "band": "low",
+      "action": "allow",
+      "alert_expected": false,
+      "vetoed_by": "T-021",
+      "signals": [
+        {"feature_key": "country_is_new_for_customer", "contribution": 50},
+        {"feature_key": "recent_travel_purchase", "contribution": -9},
+        {"feature_key": "amount_vs_baseline_z", "contribution": -6},
+        {"feature_key": "entry_mode_chip_pin", "contribution": -4}
+      ]
+    },
+    {
+      "name": "veto fixture: compromised card, genuine charge",
+      "rule_id": "R-114+T-021",
+      "subject_type": "transaction",
+      "subject_id": "TXN-48300",
+      "lane": "inline_sync",
+      "score": 68,
+      "band": "elevated",
+      "action": "monitor",
+      "action_source_rule": "R-114",
+      "rule_wanted": "challenge",
+      "alert_expected": true,
+      "vetoed_by": "T-021",
+      "signals": [
+        {"feature_key": "card_cnp_count", "contribution": 34},
+        {"feature_key": "device_first_seen_min", "contribution": 21},
+        {"feature_key": "session_geo_jump_km", "contribution": 18},
+        {"feature_key": "mcc_is_new_for_customer", "contribution": 14},
+        {"feature_key": "recent_travel_purchase", "contribution": -9},
+        {"feature_key": "amount_vs_baseline_z", "contribution": -6},
+        {"feature_key": "entry_mode_chip_pin", "contribution": -4},
+        {"feature_key": null, "contribution": 0, "direction": "veto"}
+      ]
+    }
+  ],
+  "population": {
+    "card_testing_merchant": "MER-TEST",
+    "card_testing_declines_in_window": 22,
+    "refund_abuse_customer": "CUST-REFUND",
+    "labelled_fraud_clusters": 22
+  }
+}
