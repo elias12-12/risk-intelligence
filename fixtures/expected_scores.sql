@@ -5,7 +5,7 @@ WITH expected(rule_id, subject_type, subject_id, exp_score, exp_action) AS (
   VALUES ('R-114', 'transaction', 'TXN-48291', 87, 'challenge'),
          ('L-203', 'network', 'RING-1187', 64, 'hold'),
          ('S-077', 'account', 'ACC-2201', 58, 'hold'),
-         ('T-021', 'transaction', 'TXN-48251', 31, 'allow'),
+         ('T-021', 'transaction', 'TXN-48251', 0, 'allow'),
          ('R-114+T-021', 'transaction', 'TXN-48300', 68, 'monitor')
 )
 SELECT e.subject_id,

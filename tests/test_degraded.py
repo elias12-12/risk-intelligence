@@ -64,13 +64,22 @@ def test_removing_a_mitigator_raises_the_score_and_caps_the_severity(conn, ctx):
 
 
 def test_the_same_removal_raises_the_travel_case_too(conn, ctx):
+    """§5's criterion survives the 0026 reprice, and reads more sharply after it.
+
+    At +50 this was 31 -> 40. At +12 the intact pool is 12-9-6-4 = -7, which
+    consolidation drops (the exoneration consumed the accusation), so the case
+    scores 0. Delete the travel mitigator and the -9 disappears: the pool is
+    12-6-4 = +2, which survives. The score still goes UP when the evidence that
+    would exonerate someone goes missing — which is the whole of §5 — and here
+    it is the difference between no case at all and a case.
+    """
     request = request_for(conn, ctx, "inline_sync", "transaction", "TXN-48251")
-    assert evaluate(conn, request, ctx).pool.subject_score == 31
+    assert evaluate(conn, request, ctx).pool.subject_score == 0
 
     with conn.cursor() as cur:
         cur.execute("DELETE FROM feature_values WHERE feature_key='recent_travel_purchase'")
     after = evaluate(conn, request, EngineContext.load(conn))
-    assert after.pool.subject_score == 40          # 50 - 6 - 4
+    assert after.pool.subject_score == 2           # 12 - 6 - 4
     assert "recent_travel_purchase" in after.degraded_features
 
 

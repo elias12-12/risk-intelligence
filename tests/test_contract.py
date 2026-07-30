@@ -1,8 +1,10 @@
 """§12 — the read contract, frozen, and its two invariants.
 
-Plus its Week-3 siblings. queue.v1 and executions.v1 publish what §8 and §9
-produced WITHOUT touching a byte of alert.v1, which is why models.py was left
-alone and why alert.v1's digest is pinned below.
+Plus its siblings. queue.v1 and executions.v1 (Week 3) publish what §8 and §9
+produced; kpis.v1 and explanation.v1 (Week 4) publish §11 and §13. Four contracts
+have now been added WITHOUT touching a byte of alert.v1, which is the mechanism
+working — and why models.py has never been reopened and why alert.v1's digest is
+pinned below.
 """
 from __future__ import annotations
 
@@ -75,16 +77,22 @@ def test_every_contract_is_registered_and_every_registration_has_a_file():
 
 
 def test_the_sibling_contracts_do_not_redefine_the_frozen_models():
-    """queue.v1 and executions.v1 are SIBLINGS of alert.v1, not successors.
+    """Every non-alert contract is a SIBLING of alert.v1, not a successor.
 
     Subject, Signal, Action and Evidence live inside alert.v1's $defs closure, so
-    adding a field to any of them for the queue's benefit would change alert.v1's
+    adding a field to any of them for a sibling's benefit would change alert.v1's
     bytes and break the digest above. The siblings import nothing into their own
-    $defs; that is why models.py was left untouched this week.
+    $defs; that is why models.py has never been reopened.
+
+    The list is derived from CONTRACTS rather than written out, so a sibling
+    added later is covered without anyone remembering to add it here.
     """
-    for name in ("queue.v1", "executions.v1"):
+    siblings = [n for n in export_contract_schema.CONTRACTS if n != "alert.v1"]
+    assert len(siblings) >= 3, "queue.v1, executions.v1, kpis.v1 and beyond"
+    for name in siblings:
         defs = json.loads(export_contract_schema.render(name))["$defs"]
-        assert not {"AlertDetail", "AlertSummary", "Signal", "Evidence"} & set(defs)
+        assert not {"AlertDetail", "AlertSummary", "Signal", "Evidence"} & set(defs), (
+            f"{name} pulled a frozen model into its own closure")
 
 
 @pytest.mark.parametrize("name", sorted(export_contract_schema.CONTRACTS))

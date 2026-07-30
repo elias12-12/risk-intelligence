@@ -1,0 +1,282 @@
+{
+  "$defs": {
+    "CaseReport": {
+      "$defs": {
+        "Citation": {
+          "additionalProperties": false,
+          "description": "Where one quoted value came from.\n\n`source='derived'` is not a cheat: it is how arithmetic declares itself. The\nformula goes in `key`, so a reader can recompute it from the other citations\nwithout trusting this one.",
+          "properties": {
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "label": {
+              "title": "Label",
+              "type": "string"
+            },
+            "source": {
+              "title": "Source",
+              "type": "string"
+            },
+            "value": {
+              "title": "Value",
+              "type": "string"
+            }
+          },
+          "required": [
+            "label",
+            "source",
+            "key",
+            "value"
+          ],
+          "title": "Citation",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "alert_id": {
+          "title": "Alert Id",
+          "type": "integer"
+        },
+        "citations": {
+          "items": {
+            "$ref": "#/$defs/Citation"
+          },
+          "title": "Citations",
+          "type": "array"
+        },
+        "draft": {
+          "default": true,
+          "title": "Draft",
+          "type": "boolean"
+        },
+        "draft_notice": {
+          "default": "DRAFT — generated from stored rows. An analyst must review this before it is filed. Nothing in it has been checked against anything outside this case.",
+          "title": "Draft Notice",
+          "type": "string"
+        },
+        "generated_from": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Generated From"
+        },
+        "markdown": {
+          "title": "Markdown",
+          "type": "string"
+        },
+        "method": {
+          "default": "Deterministic templating over stored rows. No language model is involved in any field of this payload; every number is quoted from the citation beside it and every derived number names its formula.",
+          "title": "Method",
+          "type": "string"
+        },
+        "model_backed": {
+          "default": false,
+          "title": "Model Backed",
+          "type": "boolean"
+        },
+        "subject_id": {
+          "title": "Subject Id",
+          "type": "string"
+        },
+        "subject_type": {
+          "title": "Subject Type",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "unresolvable_versions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unresolvable Versions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "alert_id",
+        "title",
+        "subject_type",
+        "subject_id",
+        "markdown"
+      ],
+      "title": "CaseReport",
+      "type": "object"
+    },
+    "CopilotResponse": {
+      "$defs": {
+        "Citation": {
+          "additionalProperties": false,
+          "description": "Where one quoted value came from.\n\n`source='derived'` is not a cheat: it is how arithmetic declares itself. The\nformula goes in `key`, so a reader can recompute it from the other citations\nwithout trusting this one.",
+          "properties": {
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "label": {
+              "title": "Label",
+              "type": "string"
+            },
+            "source": {
+              "title": "Source",
+              "type": "string"
+            },
+            "value": {
+              "title": "Value",
+              "type": "string"
+            }
+          },
+          "required": [
+            "label",
+            "source",
+            "key",
+            "value"
+          ],
+          "title": "Citation",
+          "type": "object"
+        },
+        "CopilotAnswer": {
+          "additionalProperties": false,
+          "properties": {
+            "chip": {
+              "enum": [
+                "why_flagged",
+                "what_would_clear_it",
+                "what_should_i_do_first"
+              ],
+              "title": "Chip",
+              "type": "string"
+            },
+            "citations": {
+              "items": {
+                "$ref": "#/$defs/Citation"
+              },
+              "title": "Citations",
+              "type": "array"
+            },
+            "lines": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Lines",
+              "type": "array"
+            },
+            "mitigating_cited": {
+              "default": 0,
+              "title": "Mitigating Cited",
+              "type": "integer"
+            },
+            "mitigating_total": {
+              "default": 0,
+              "title": "Mitigating Total",
+              "type": "integer"
+            },
+            "question": {
+              "title": "Question",
+              "type": "string"
+            },
+            "score_quoted": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Score Quoted"
+            },
+            "signals_total": {
+              "default": 0,
+              "title": "Signals Total",
+              "type": "integer"
+            },
+            "veto_cited": {
+              "default": 0,
+              "title": "Veto Cited",
+              "type": "integer"
+            },
+            "veto_total": {
+              "default": 0,
+              "title": "Veto Total",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "chip",
+            "question",
+            "lines"
+          ],
+          "title": "CopilotAnswer",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "alert_id": {
+          "title": "Alert Id",
+          "type": "integer"
+        },
+        "answers": {
+          "items": {
+            "$ref": "#/$defs/CopilotAnswer"
+          },
+          "title": "Answers",
+          "type": "array"
+        },
+        "method": {
+          "default": "Deterministic templating over stored rows. No language model is involved in any field of this payload; every number is quoted from the citation beside it and every derived number names its formula.",
+          "title": "Method",
+          "type": "string"
+        },
+        "model_backed": {
+          "default": false,
+          "title": "Model Backed",
+          "type": "boolean"
+        },
+        "reads": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reads",
+          "type": "array"
+        },
+        "subject_id": {
+          "title": "Subject Id",
+          "type": "string"
+        },
+        "subject_type": {
+          "title": "Subject Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "alert_id",
+        "subject_type",
+        "subject_id",
+        "answers"
+      ],
+      "title": "CopilotResponse",
+      "type": "object"
+    }
+  },
+  "$id": "https://glassbox.local/contract/explanation.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Frozen. Generated by scripts/export_contract_schema.py from src/glassbox/contract/models.py. Do not edit by hand; a breaking change becomes explanation.v2.schema.json and v1 keeps being served.",
+  "title": "GlassBox explanation contract, version 1"
+}

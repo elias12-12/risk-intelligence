@@ -90,6 +90,12 @@ python scripts/run_features.py --no-graph --feature card_challenge_fails_30d
 Step 'Condition performance — §10'
 python scripts/condition_report.py
 
+Step 'Band calibration — §10 (recommends, never writes)'
+python scripts/calibrate_bands.py
+
+Step 'KPIs — §11'
+python scripts/kpi_report.py
+
 Step 'Published contract'
 python scripts/export_contract_schema.py
 python scripts/export_expectations.py
@@ -103,8 +109,11 @@ Step 'Done'
 Write-Host @'
 Next:
   psql "$env:GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   human-readable proof
+  python scripts/case_report.py --alert 5 --citations           the filing draft, sourced
   python -m glassbox serve                                      read API on :8000
   curl http://127.0.0.1:8000/alerts                             alert.v1
   curl http://127.0.0.1:8000/queue                              queue.v1, priority-ordered
   curl http://127.0.0.1:8000/alerts/1/executions                executions.v1
+  curl http://127.0.0.1:8000/kpis                               kpis.v1, nine tiles
+  curl http://127.0.0.1:8000/alerts/5/copilot                   explanation.v1
 '@ -ForegroundColor Green

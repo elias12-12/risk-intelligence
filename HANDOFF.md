@@ -1,13 +1,213 @@
 # Handoff — GlassBox
 
-**Branch:** `week2-contract-engine` · **Base:** `main` @ `3c640f6`
-**Status:** Week 2 complete (§§3–7, §12). Week 3 complete for §8, §9, §10 and the
-sibling read contracts; §13, the `sequence` runner and the version stores are
-deferred with reasons in §W3.5.
-**Verified against:** PostgreSQL 16 (docker-compose), 149 tests green.
+**Status:** Week 4 complete. Every numbered item of `architecture.md` Part I is
+now **DONE** — §10's calibration applied, §11's nine tiles computed from stored
+rows, §13's explanation surfaces built deterministically, §14's second pattern
+tested. What remains is listed in §W4.6 and none of it is a Part I item.
+**Verified against:** PostgreSQL 16 (docker-compose), 215 tests green.
 
-Week 3's account is first; the Week-2 account below it is unchanged and still the
-authoritative record of that week's six defects.
+Newest week first. Each week's account is left as it was written; where a later
+week moved something, the later account says so rather than editing the earlier
+one.
+
+---
+
+# Week 4 — calibration, KPIs, the second extension, the explanation surface
+
+## W4.1 What changed, in one paragraph each
+
+**§10 — the report's own finding is applied, and it moved a signed-off score.**
+`country_is_new_for_customer` was +50, sized backwards in Week 1 so T-021's points
+would sum to its displayed 31. Seed `0026` reprices it to **+12**: its measured
+precision (6.78% over 398 firings) at the cost per precision point the catalog's
+comparable aggravators actually charge. `points_per_precision_point` falls 7.4 →
+1.8, level with `session_geo_jump_km` at 1.7 and `mcc_is_new_for_customer` at 1.6.
+Seed `0027` calibrates the transaction band cutoffs to **75 / 40** and marks every
+other subject type UNCALIBRATED in its own `basis`. This is the first thing in the
+project to change a number that had been signed off, and §W4.2 is its blast radius.
+
+**§11 — nine tiles, each computed from stored rows and each naming its window.**
+Five `v_kpi_*` views carry the classification; `contract/kpis.py` carries the
+window arithmetic and is the only place a window is defined. Every rate publishes
+its numerator and denominator, every delta compares against the immediately
+preceding window of the same length or is null, and the two tiles whose numbers
+are synthetic say so on the wire rather than in a footnote.
+
+**§13 — the copilot and the case report, deterministic, no model.** Three chips
+and a filing draft, templated over the alert in view and nothing else. Every
+number in the output passes through a `Quoter` that records the table and primary
+key it came from — or, for a derived number, the formula — so "quoted, never
+restated" is mechanical rather than careful. §18's open decision 7 is settled by
+building: **no language model is involved in any field of any payload**, and
+`model_backed: false` is published so a client can tell.
+
+**§14 — both patterns now detect end to end via INSERT only.** `RF-401`, refund
+abuse, on a **customer** subject with two conditions AND'd across groups. Seed
+`0028` adds two catalog rows; the rule is authored inside the test, under the same
+DDL hook card testing uses, which is now shared from `conftest.py`.
+
+## W4.2 The repricing, and the defect it exposed
+
+`TXN-48251` was **31**. It is now **0**, with an empty signal set.
+
+The arithmetic: `12 − 9 − 6 − 4 = −7`. The plan and the Week-3 handoff both
+predicted 0 via the mitigator-only rule — and both were wrong about the mechanism,
+which is how the defect surfaced. Week 2's guard was *"no aggravating signal at
+all → drop the pool"*. TXN-48251 **has** an aggravator, so the pool survived and
+the engine published **−7**: a negative risk score, in the one decision out of
+9,923 where the mitigators outweigh a repriced aggravator.
+
+`engine/consolidate.py` now tests the **pool's sum** rather than the presence of an
+aggravator. It is the same argument Week 2 wrote and never generalised: a mitigator
+is a deduction from an accusation, and when the deductions consume the accusation
+there is no accusation left. Dropping the pool keeps `sum(signals) == score` exact
+where clamping the score to zero would have broken it —
+`test_consolidation.py::test_the_drop_is_on_the_pool_sum_not_the_presence_of_an_aggravator`
+pins it so it cannot be narrowed back.
+
+Everything else held: `TXN-48300`'s 68 is untouched (this condition does not fire
+there), and 87 / 64 / 58 are unmoved.
+
+What moved with it: `fixtures/expected_scores.json` (and the regenerated
+`.sql`), `test_degraded.py`, `test_precedence.py`, `test_conditions_ledger.py`,
+`test_condition_report.py`, `README.md`, and the fixture tables in §W3.2 and §1
+below — all amended in place with a note, not rewritten.
+
+**Two tests read better after the change than before it.** §5's criterion is now
+`0 → 2` rather than `31 → 40`: deleting the travel mitigator is the difference
+between no case and a case, which is the sharpest form of "a missing mitigator
+raises the score". And `TXN-48251` now demonstrates **two** of the three reasons
+the condition ledger does not sum to the score — the satisfaction gate *and* the
+net-negative drop — where before it showed one.
+
+## W4.3 What you can run right now
+
+```powershell
+.\scripts\bootstrap.ps1        # run with the venv on PATH; ~3 min, 215 tests
+```
+
+```bash
+psql "$GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   # 87 / 68 / 64 / 58 / 0
+python scripts/condition_report.py                       # no material misprice left
+python scripts/calibrate_bands.py                        # recommends; never writes
+python scripts/kpi_report.py --verbose                   # nine tiles, with derivations
+python scripts/case_report.py --alert 5 --citations      # every number, sourced
+python scripts/case_report.py --alert 5 --copilot        # the three chips
+python -m glassbox serve
+curl http://127.0.0.1:8000/kpis
+curl http://127.0.0.1:8000/alerts/5/copilot
+```
+
+The five signed-off scores, with the one that moved:
+
+| Subject | Rules | Score | Band | Action | Note |
+|---|---|---:|---|---|---|
+| `TXN-48291` | R-114 | **87** | high | `challenge` | |
+| `TXN-48300` | R-114 + T-021 | **68** | elevated | `monitor` | the veto held it; §13's acceptance now binds here |
+| `RING-1187` | L-203 | **64** | elevated | `hold` | |
+| `ACC-2201` | S-077 | **58** | elevated | `hold` | |
+| `TXN-48251` | T-021 | **0** | low | `allow` | was 31; repriced by `0026`, pool dropped |
+
+Population: 9,844 transactions → 9,923 decisions, 7 alerts, **0 negative scores**,
+0 invariant failures in `v_alert_invariants` or `v_decision_routing`. On a 7-day
+window: 5 cases against 1 in the preceding week, a 95% false-negative rate over 80
+labelled-fraud decisions, and 4 preventive actions issued.
+
+## W4.4 The KPI numbers worth knowing, and why two of them look bad
+
+**False-negative rate 95% (76/80).** That is the generator working as designed:
+the labelled cohort was deliberately sized so most clusters fall below R-114's
+line. A cohort the rules caught entirely would make this tile read 0% and prove
+nothing. It is exact on this dataset and meaningless beyond it, and the tile says
+so on the wire.
+
+**Prevention false positives: 0 of 4.** A result, not an absence. Every preventive
+action here lands on a fraud-labelled subject, so no challenge passes and nothing
+is dispositioned `confirmed_legit`. The join §8 exists for works; it has nothing
+to find. The denominator is published for exactly that reason.
+
+**Fail-open 96.75%.** This is `decisions.fail_mode`, which holds the inline lane's
+POLICY and has never recorded an observed failure, because nothing real has run.
+The tile carries that sentence in its caveat. It is the one number in the set that
+would be actively misleading without it.
+
+## W4.5 Decisions taken that the plan did not specify
+
+| # | Decision | Why |
+|---|---|---|
+| 1 | The consolidation guard tests the pool's SUM, not the presence of an aggravator | The reprice produced a −7. Week 2's guard was the right argument applied to one case of it; see §W4.2. |
+| 2 | Band cutoffs by **maximum gap**, not percentile | The transaction distribution is bimodal with a 56-point empty region. p95 is 12 and p99 is 68 — a percentile rule would band every single-condition firing `elevated` and promote the veto fixture to `high`. A cutoff belongs in the empty region, where every available value gives the identical partition. |
+| 3 | `account` and `network` left uncalibrated, and labelled so | One scoring subject each. A cutoff derived from n=1 is n=1 wearing a calibration's clothes, and `engine/bands.py` reads this table on every decision. |
+| 4 | The condition report's recommendation is gated on a **materiality threshold** against the catalog's MEDIAN cost | Anchoring on the cheapest condition anchors on a fixture: `device_first_seen_min` earns 97% over 36 firings, almost all planted. The report now says "no aggravator is materially mispriced" when that is true, which a report that can only report one finding could not. |
+| 5 | Five KPI views, not seven; the windowing lives in `contract/kpis.py` | A view takes no parameters, so the aggregation cannot live in SQL if every tile must name its window and its predecessor. The views carry the CLASSIFICATION — what counts as a case, as ground truth, as preventive — and one module carries the arithmetic. |
+| 6 | `KpiPart` carries its own numerator and denominator | §11's "block / challenge / fail-open rate" is one row covering three rates whose denominators differ. Sharing the tile's denominator across them would be the exact error the denominator rule exists to prevent. |
+| 7 | Constraint 3 is enforced as a **raising validator**, not a template convention | "An explanation that lists only aggravators is wrong even when every line is true" is a claim about the payload, so the payload refuses to be built. Same mechanism as alert.v1's `sum(signals) == score`. |
+| 8 | Stored prose is cited **whole**, and the numeric sweep checks containment | `clear_text` contains "90 days"; that 90 belongs to whoever wrote the rule. Exempting prose from the sweep instead would have left the obvious loophole — an unsourced number hiding inside a sentence. |
+| 9 | The `what should I do first` chip names the veto | `recommended_action_text` belongs to the rule that carried the SEVERITY. On TXN-48300 that is R-114, which wanted to challenge. Quoting it alone would advise an analyst to do the thing the system deliberately declined to do, in the system's own voice. |
+| 10 | §13's acceptance moved from `TXN-48251` to `TXN-48300` | §13 asks for a report naming T-021's three mitigators and the veto. After the reprice TXN-48251 has an empty pool and no alert, so it cannot carry that test. TXN-48300 has all three mitigators, the veto signal, and `vetoed_by = T-021`. |
+| 11 | Refund abuse uses `count` + `sum`, not a ratio | The pattern wants refunds over purchases. §3.1's `ratio` is deliberately unimplemented, and adding it to make this land would have been the data-engineering ticket §14 says such a pattern costs — for the very feature offered as evidence that it does not. |
+
+## W4.6 What is deliberately not done
+
+- **The `sequence` source kind.** `new_payee_then_drain` is still the one
+  hand-seeded feature value. One raise site, `features/compiler.compile_spec`.
+- **Batch/incremental consistency test** (§17). `run_population(as_of=…)` already
+  gives the batch behaviour, so there is no second implementation to build.
+- **`rule_versions` / `feature_catalog_versions` are still empty.** The case
+  report now *says* so rather than printing a version number that resolves to
+  nothing, which turns a silent audit gap into a stated one — but it is still a
+  gap. A `publish` step that snapshots current definitions closes it.
+- **The scheduler.** §15's topology is "one service, one database, a scheduler".
+  `run_cycle.py` is still run by hand, and §18's decision 6 (the async cycle
+  period) is still open.
+- **The console, and admin write endpoints.** Out of scope by decision. Five
+  contracts now exist for it to bind to, all generated from Pydantic models and
+  byte-checked, and `alert.v1`'s digest has not moved through any of it.
+- **A model behind the copilot.** Settled the other way, on §13's own argument.
+  If one is introduced it sits behind the same five constraints with the
+  arithmetic still computed outside it.
+- **T-021's `clear_text` reads oddly on TXN-48300, and that is left alone.** It
+  says "Already below the line", which was written for TXN-48251 and is false of
+  a case scoring 68. The copilot quotes it verbatim, which is correct behaviour —
+  the sentence belongs to whoever authored the rule, and a surface that silently
+  improved it would be restating rather than quoting. Fixing it is a seed file
+  editing rule prose, and it is a content change to a signed-off fixture, so it
+  is named here rather than made quietly.
+
+## W4.7 Three things to know before changing this
+
+1. **`consolidate` drops a pool that does not net positive, and that is not a
+   clamp.** Clamping the score to zero while still publishing the signals breaks
+   `sum(signals) == score`, which is the product. If you need a case to show a
+   score with mitigators outweighing aggravators, the answer is repricing, not
+   loosening the guard.
+2. **The explanation surface may read six relations and no more.**
+   `explain/evidence.ALLOWED_RELATIONS` is the list, and `test_explain.py` proves
+   it with a cursor hook that fails on `transactions`, `feature_values`,
+   `case_outcomes` or any `v_kpi_*`. If a chip needs a fact from outside that set,
+   the fact belongs on the alert, not in a second query.
+3. **Every number that reaches an explanation must pass through `Quoter.q`.**
+   There is deliberately no other way to turn a value into text in that package.
+   An f-string that interpolates a Decimal directly will pass review and fail
+   `test_every_number_traces_to_a_citation`.
+
+## W4.8 Ledger against `architecture.md`
+
+| # | Item | Status |
+|---|---|---|
+| §1 | The invariant | **DONE** — three layers, and now a fourth: `CopilotAnswer` refuses an explanation that drops a mitigator |
+| §3 | Feature specs, runners, resolution, clusters | **MOSTLY** — `sequence` and `expression` still unimplemented; consistency test unwritten |
+| §4 | Point-in-time selection | **DONE** |
+| §5 | Absent and degraded features | **DONE** |
+| §6 | Consolidation | **DONE** — guard generalised in Week 4, see §W4.2 |
+| §7 | Action precedence | **DONE** |
+| §8 | Action execution and outcome capture | **DONE** (Week 3) |
+| §9 | Alert hygiene | **DONE** (Week 3) |
+| §10 | Population scoring **and calibration** | **DONE** (Week 4) — condition repriced in `0026`, bands calibrated in `0027` |
+| §11 | KPIs and the analytics contract | **DONE** (Week 4) — nine tiles, `kpis.v1`, `GET /kpis` |
+| §12 | The read contract | **DONE** — frozen, digest-pinned, now with **four** siblings |
+| §13 | Explanation surfaces | **DONE** (Week 4) — deterministic, `explanation.v1` |
+| §14 | Extension recipe as an executed test | **DONE** (Week 4) — both patterns, DDL-hooked |
 
 ---
 
@@ -58,6 +258,11 @@ The five signed-off scores are unmoved:
 | `RING-1187` | L-203 | **64** | elevated | `hold` | network subject, discovered from the link layer |
 | `ACC-2201` | S-077 | **58** | elevated | `hold` | one condition resolved via the *trigger* |
 | `TXN-48251` | T-021 | **31** | low | `allow` | no authority, so no alert |
+
+*(Week 4 note: `TXN-48251` now scores **0**. Seed `0026` repriced
+`country_is_new_for_customer` from +50 to +12 on this week's own report, and the
+pool no longer nets positive. See §W4.2. The table above is left as Week 3 wrote
+it.)*
 
 Population: 9,844 transactions → 9,923 decisions, **79,068 condition-ledger rows**,
 7 alerts (4 fixture, 3 background), 13 executions, 7 dispositions, 167,047 feature
@@ -146,6 +351,14 @@ calls bare `python` and fails against a global interpreter without the deps. It
 ends with 149 passing tests and prints the condition report. Then pick from below.
 
 ### First, and it is not a code change: reprice `country_is_new_for_customer`
+
+*(**Done in Week 4**, as seed `0026`. The prediction below — that dropping it
+under 19 makes T-021's pool net-negative and the case score 0 — was right about
+the number and wrong about the mechanism: the mitigator-only rule did not apply,
+because the pool still had an aggravator in it, and the engine published −7 until
+`consolidate.py` was generalised. §W4.2 has the account. Kept unedited because
+being wrong about a mechanism in a way the next week caught is exactly what this
+document is for.)*
 
 The report names it, the evidence is in `v_condition_performance`, and Week 4 is
 where §10 says the repricing belongs. **Read this before touching it:**
@@ -292,6 +505,8 @@ Everything below was produced by that pipeline, not written down anywhere.
 | `RING-1187` | L-203 | **64** | elevated | `hold` | network subject, discovered from the link layer |
 | `ACC-2201` | S-077 | **58** | elevated | `hold` | one condition resolved via the *trigger* |
 | `TXN-48251` | T-021 | **31** | low | `allow` | no authority, so no alert |
+
+*(Week 4 note: now **0** — see §W4.2. Left as Week 2 wrote it.)*
 
 Population: 9,844 transactions → 9,923 decisions across both lanes, 7 alerts,
 138,061 feature values, **0 invariant failures**, 310 decisions (3.1%) carrying

@@ -59,17 +59,25 @@ def consolidate(rule_scores: list[RuleScore]) -> SignalPool:
                 existing.value_as_of = fired.read.as_of
                 existing.value_computed_at = fired.read.computed_at
 
-    # A mitigator is a DEDUCTION FROM AN ACCUSATION. With no accusation there is
-    # nothing to deduct from, and emitting the deduction anyway produces a
-    # negative risk score — which on an additive scale means "safer than
-    # nothing", a claim the model cannot support. Left in, every traveller who
-    # bought a flight and paid by chip-and-PIN scored -19.
+    # A mitigator is a DEDUCTION FROM AN ACCUSATION. When the deductions consume
+    # the accusation there is no accusation left, and emitting the remainder
+    # anyway produces a negative risk score — which on an additive scale means
+    # "safer than nothing", a claim the model cannot support. Left in, every
+    # traveller who bought a flight and paid by chip-and-PIN scored -19.
     #
-    # Dropping them keeps sum(signals) == score exact, which clamping would
+    # The test is the POOL'S SUM, not the mere presence of an aggravator. Week 2
+    # wrote it as "no aggravating signal at all", which is the same rule for the
+    # mitigator-only case and silently weaker for a mixed one: any pool whose
+    # mitigators outweigh its aggravators still emitted a negative score. Nothing
+    # on the shipped fixtures reached that until 0026 repriced
+    # country_is_new_for_customer to +12, at which point TXN-48251 became
+    # 12 - 9 - 6 - 4 = -7 — one decision in 9,923, and unexplainable.
+    #
+    # Dropping the pool keeps sum(signals) == score exact, which clamping would
     # not: clamping the score at zero while still showing the signals breaks
     # §12's invariant, and that invariant is the product.
     survivors = list(buckets.values())
-    if not any(s.direction == "aggravating" for s in survivors):
+    if sum((s.contribution for s in survivors), Decimal(0)) <= 0:
         survivors = []
 
     signals = sorted(survivors,

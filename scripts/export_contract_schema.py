@@ -27,6 +27,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from glassbox import config                       # noqa: E402
 from glassbox.contract.executions import ExecutionRecord  # noqa: E402
+from glassbox.contract.explanation import CaseReport, CopilotResponse  # noqa: E402
+from glassbox.contract.kpis import KpiSet, KpiTile  # noqa: E402
 from glassbox.contract.models import AlertDetail, AlertSummary  # noqa: E402
 from glassbox.contract.queue import QueueEntry    # noqa: E402
 
@@ -40,6 +42,10 @@ CONTRACTS: dict[str, tuple[str, tuple[type, ...]]] = {
                  (QueueEntry,)),
     "executions.v1": ("GlassBox action execution contract, version 1",
                       (ExecutionRecord,)),
+    "kpis.v1": ("GlassBox analytics contract, version 1",
+                (KpiSet, KpiTile)),
+    "explanation.v1": ("GlassBox explanation contract, version 1",
+                       (CopilotResponse, CaseReport)),
 }
 
 

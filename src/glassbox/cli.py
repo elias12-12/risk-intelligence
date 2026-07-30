@@ -14,6 +14,9 @@ COMMANDS = {
     "cycle": "run_cycle.py",
     "resolve": "resolve_actions.py",
     "report": "condition_report.py",
+    "bands": "calibrate_bands.py",
+    "kpis": "kpi_report.py",
+    "explain": "case_report.py",
     "contract": "export_contract_schema.py",
 }
 

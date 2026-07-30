@@ -61,9 +61,18 @@ def test_the_ledger_does_not_claim_to_sum_to_the_score(conn):
     """Deliberate, and pinned so it is not rediscovered as a bug.
 
     Three independent policies sit between a fired condition and the score, and
-    the ledger records the evidence BEFORE all three. TXN-48251 is the
-    satisfaction gate: R-114's conditions fire, R-114 is not satisfied, so nothing
-    they priced was contributed.
+    the ledger records the evidence BEFORE all three. TXN-48251 now shows two of
+    them at once, which it did not before 0026:
+
+      1. the satisfaction gate — R-114's conditions fire, R-114 is not satisfied,
+         so nothing they priced was contributed; and
+      3. the net-negative drop — T-021 IS satisfied and contributes 12-9-6-4,
+         but a pool the mitigators have consumed publishes no signals at all,
+         because a negative risk score is not a claim an additive model can make.
+
+    So the ledger holds a positive priced total, a negative contributed total,
+    and a score of zero. Three different numbers for one decision, each correct
+    at its own layer — which is the entire argument for keeping the ledger.
     """
     row = fetch_one(
         conn,
@@ -80,7 +89,12 @@ def test_the_ledger_does_not_claim_to_sum_to_the_score(conn):
     assert row["priced_fired"] > row["contributed"], (
         "R-114 fires conditions on TXN-48251 without being satisfied; the priced "
         "total must exceed what was contributed")
-    assert row["score"] == Decimal(31)
+    assert row["contributed"] < 0, (
+        "T-021 is satisfied and its mitigators outweigh its aggravator: "
+        "12 - 9 - 6 - 4 = -7 was actually contributed")
+    assert row["score"] == Decimal(0), (
+        "and the score is nevertheless 0 — consolidation drops a pool the "
+        "mitigators have consumed rather than publish a negative risk score")
 
     # The mitigator-only case, and there are thousands of them: any traveller
     # paying by chip-and-PIN trips T-021's mitigators with no aggravator in the

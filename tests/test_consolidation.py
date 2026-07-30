@@ -119,11 +119,35 @@ def test_an_unsatisfied_rule_contributes_nothing(conn, ctx):
     assert not any(s.source_rule_id == "R-114" for s in result.pool.signals)
 
 
-def test_mitigators_alone_never_produce_a_negative_score(conn):
-    """A mitigator is a deduction from an accusation. With no accusation there
-    is nothing to deduct from, and a negative risk score is not a claim the
-    additive model can support."""
+def test_mitigators_never_produce_a_negative_score(conn):
+    """A mitigator is a deduction from an accusation. When the deductions consume
+    the accusation there is nothing left to publish, and a negative risk score is
+    not a claim the additive model can support."""
     assert fetch_value(conn, "SELECT count(*) FROM decisions WHERE score < 0") == 0
+
+
+def test_the_drop_is_on_the_pool_sum_not_the_presence_of_an_aggravator(conn, ctx):
+    """The generalisation 0026 forced, pinned so it is not narrowed back.
+
+    Week 2 wrote the guard as "no aggravating signal at all", which is correct
+    for a mitigator-only pool and silently weaker for a mixed one. TXN-48251 has
+    an aggravator — country_is_new_for_customer at +12 — and three mitigators
+    worth -19, so under the old guard it published -7. Under the current guard
+    the pool is dropped whole, which keeps sum(signals) == score exact where
+    clamping the score to zero would have broken it.
+    """
+    result = evaluate(conn,
+                      request_for(conn, ctx, "inline_sync", "transaction", "TXN-48251"),
+                      ctx)
+    t021 = next(rs for rs in result.rule_scores if rs.rule_id == "T-021")
+    assert t021.evaluation.satisfied, "the rule fired; it is the POOL that is dropped"
+    assert any(c.condition.contribution_points > 0 for c in t021.evaluation.fired), (
+        "an aggravating condition did fire — the old guard would have kept the pool")
+    assert t021.score == -7                        # 12 - 9 - 6 - 4
+    assert result.pool.signals == []
+    assert result.pool.subject_score == 0
+    assert sum((s.contribution for s in result.pool.signals), Decimal(0)) == \
+        result.pool.subject_score
 
 
 def test_rerunning_a_lane_adds_a_new_evaluation_not_a_duplicate(conn, ctx):

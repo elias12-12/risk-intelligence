@@ -9,6 +9,11 @@ plus `rule_conditions` rows, and a feature is a `feature_catalog` row carrying
 its own computation spec. The Python in `src/glassbox/` interprets those rows —
 it does not encode any particular pattern.
 
+**New here?** [WALKTHROUGH.md](WALKTHROUGH.md) explains the whole system end to
+end — in plain English first, with no code and every term defined, then the same
+journey again with the file and function at each step. This README assumes you
+already know what the system is for.
+
 ---
 
 ## Quick start
@@ -20,9 +25,9 @@ it does not encode any particular pattern.
 That starts Docker Desktop if needed, brings up PostgreSQL 16, installs
 dependencies, generates fixtures, migrates and seeds, computes the feature
 layer, runs both decisioning lanes, settles the actions they issued, feeds the
-outcomes back in as a feature, prints the condition-performance report, exports
-the published contracts and runs the acceptance suite. Roughly three minutes
-cold.
+outcomes back in as a feature, prints the condition-performance report, the band
+calibration and the nine KPI tiles, exports the published contracts and runs the
+acceptance suite. Roughly three minutes cold.
 
 Step by step:
 
@@ -39,9 +44,12 @@ python scripts/run_cycle.py --lane async
 python scripts/resolve_actions.py           # settle challenges, disposition cases
 python scripts/run_features.py --no-graph --feature card_challenge_fails_30d
 python scripts/condition_report.py          # which conditions are mispriced
+python scripts/calibrate_bands.py           # where the band cutoffs should sit
+python scripts/kpi_report.py                # the nine tiles
+python scripts/case_report.py --alert 5 --citations   # a filing draft, sourced
 
-psql "$GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   # 87 / 68 / 64 / 58 / 31
-pytest                                                    # 149 tests
+psql "$GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   # 87 / 68 / 64 / 58 / 0
+pytest                                                    # 215 tests
 python -m glassbox serve                                  # read API on :8000
 ```
 
@@ -63,7 +71,15 @@ every score is produced by the engine. Nothing below is written down anywhere.
 | `TXN-48300` | R-114 + T-021 | 68 | elevated | **`monitor`** | R-114 wants to challenge; T-021's veto holds it back |
 | `RING-1187` | L-203 | 64 | elevated | `hold` | A network subject, discovered from the link layer |
 | `ACC-2201` | S-077 | 58 | elevated | `hold` | Resolves a condition against the *triggering row* |
-| `TXN-48251` | T-021 | 31 | low | `allow` | Mitigating evidence keeps it out of the queue |
+| `TXN-48251` | T-021 | 0 | low | `allow` | The exoneration consumed the accusation; no score to show |
+
+`TXN-48251` scored 31 until the condition report was acted on. Its aggravator was
+priced at +50 — a number reverse-engineered in Week 1 so that case's points would
+sum to its displayed score — and earned 6.78% precision over 398 firings, 4.4×
+the cost per unit of measured precision of any comparable aggravator. Seed `0026`
+reprices it to **+12**. The pool is then `12 − 9 − 6 − 4`, the mitigators outweigh
+the accusation, and consolidation publishes nothing rather than a negative risk
+score. Same story, defensible price, empty bar.
 
 Alongside them sits a scored population: ~9,800 transactions, ~300 declines,
 ~120 refunds, a 22-decline card-testing burst, a refund-abuse customer and 22
@@ -74,6 +90,13 @@ Every one of those 9,923 decisions records what became of it — `raised`,
 evaluated, fired or not: 79,068 ledger rows. That is what turns "alert volume"
 from a count of evaluation cycles into a count of cases, and what makes "which
 conditions are mispriced" a query rather than a guess.
+
+It also makes the nine KPI tiles arithmetic instead of illustration. Over the
+seven days to the reference instant: 5 cases against 1 the week before, a 95%
+false-negative rate over 80 labelled-fraud decisions, 4 preventive actions issued
+and 0 prevention false positives out of 4. Every one of those numbers carries its
+denominator, its window, and — where it was settled by a script rather than
+observed — a flag saying so.
 
 ---
 
@@ -91,9 +114,17 @@ db/seeds/       0009-0010  the catalog and the four rules
                            score bands, novelty baselines, driver filters
                 0024-0025  hygiene policy + action routing; the challenge-history
                            feature (INSERTs only — no engine change)
+                0026-0028  the repriced condition, the calibrated bands, and the
+                           refund-abuse features — all three are UPDATEs and
+                           INSERTs applied by hand from a report's evidence
 db/views/       v_alert_invariants.sql       sum(signals) == score
                 v_decision_routing.sql       the routing invariant 0023 could not CHECK
                 v_condition_performance.sql  §10: cost per unit of precision
+                v_kpi_decisions.sql          volume, distribution, recall, fail-open
+                v_kpi_cases.sql              dispositions and the triage clock
+                v_kpi_executions.sql         what was done, and prevention precision
+                v_kpi_rule_attribution.sql   asserted vs carried, after dedup
+                v_kpi_reason_codes.sql       the trend, and its baseline window
 db/acceptance/  verify_scores.sql          read-only; no hardcoded subject ids
 
 src/glassbox/
@@ -106,17 +137,24 @@ src/glassbox/
               pit.py        the point-in-time read
               conditions.py fire / degrade, and record the verdict once
               scoring.py    per-rule score, before dedup
-              consolidate.py one signal per (feature, direction)
+              consolidate.py one signal per (feature, direction); drop a pool
+                            the mitigators consumed
               precedence.py veto -> authority -> severity -> prevention -> cap
               exposure.py   money at risk, bounded at the decision's PIT bound
               persist.py    one decision; the condition ledger; fold/restate/suppress
               execute.py    issue what was authorised, once per case
               outcomes.py   settle challenges, disposition cases (synthetic)
               evaluation.py the order, which is the design
+  explain/    evidence.py   the six relations, and the Quoter every number passes
+              copilot.py    three chips, templated
+              case_report.py the filing draft, which says it is one
   contract/   models.py     alert.v1 — frozen, digest-pinned
               queue.py      queue.v1 — priority, with its factors published
               executions.py executions.v1 — what was done, and its synthetic flag
-  api/        four read endpoints
+              kpis.py       kpis.v1 — nine tiles, and the only place a window is defined
+              explanation.py explanation.v1 — and the validator that refuses to
+                            explain a score without its mitigators
+  api/        seven read endpoints
 ```
 
 The pipeline order, in one line each:
@@ -207,14 +245,53 @@ on a restatement. A ring re-evaluated every fifteen minutes would otherwise send
 the customer 96 step-ups a day, and "block rate" counted off decisions would be
 double the number of customers actually affected.
 
+**A negative risk score is not a claim the model can make.** A mitigator is a
+deduction from an accusation. When the deductions consume the accusation there is
+nothing left to publish, so consolidation drops the pool whole — score 0, empty
+signal set. Clamping the score to zero while still showing the signals would break
+`sum(signals) == score`, and that invariant is the product. `TXN-48251` is the
+case: `12 − 9 − 6 − 4 = −7`, published as 0 with nothing on the bar.
+
+**Every tile names its window, its denominator, and what it cannot tell you.**
+Deltas compare against the immediately preceding window of the same length and
+nothing else — when the dataset does not reach back that far, the delta is null
+and the payload says why. The false-negative rate is exact against planted ground
+truth and meaningless beyond it; the challenge pass rate was settled by a script,
+not a customer; `fail_mode` records the lane's policy and has never seen a
+failure. All three ride with a `synthetic` flag and a caveat rather than a
+footnote.
+
+**The explanation surface is deterministic, and can only read one case.** The
+copilot and the case report are templating over `alert_signals`, `decisions`,
+`action_executions` and three more relations for the alert in view — a cursor
+hook in the test suite fails the build if anything else is queried. Every number
+in the output passes through a `Quoter` that records the table and primary key it
+came from, or the formula if it was derived, and a test extracts every numeric
+token and checks it traces back. Mitigators and applied vetoes are not optional:
+`CopilotAnswer` raises rather than return an explanation that quotes a score
+without them. No language model is involved in any field of any payload, which is
+a design choice rather than a limitation — the explanation surface of a glass-box
+system should not itself be a black box.
+
 ---
 
 ## Extending it: what costs rows, and what costs code
 
-`tests/test_extension_cardtesting.py` adds a complete card-testing detector with
-two INSERTs and detects the planted burst end to end. A psycopg hook records
-every statement executed in the test body and fails if any of them is DDL, so
-that claim is checked rather than asserted.
+Two detectors are added this way, and both are tests rather than paragraphs.
+`tests/test_extension_cardtesting.py` builds a card-testing detector on a
+**merchant** subject with two INSERTs; `tests/test_extension_refundabuse.py`
+builds a refund-abuse detector on a **customer** subject, with two conditions
+AND'd across groups, over two catalog rows seeded in `0028`. A psycopg hook
+records every statement executed in either test body and fails if any of them is
+DDL, so the claim is checked rather than asserted.
+
+The refund detector also shows the claim's edge. The pattern wants refunds as a
+*ratio* of purchases; §3.1 names a `ratio` reducer and `aggregations.py`
+deliberately does not implement one. Writing it to make this land would have been
+exactly the data-engineering ticket the table below describes — for the very
+feature offered as evidence that growth costs rows. So the detector is built from
+`count` and `sum`, and the honest cost is that it cannot normalise for customer
+size.
 
 The claim has limits, and they matter:
 
@@ -237,7 +314,7 @@ and it is worth saying so out loud.
 ## Tests
 
 ```bash
-pytest                       # 149 tests, ~85s including a full rebuild
+pytest                       # 215 tests, ~90s including a full rebuild
 pytest tests/test_degraded.py -v
 ```
 
@@ -259,11 +336,15 @@ a test that mutates rules or catalog rows cannot leak.
 | `test_execution.py` | §8 — issuance, settlement, determinism, the outcome-fed feature |
 | `test_hygiene.py` | §9 — N runs / one case, restatement, suppression, exposure |
 | `test_conditions_ledger.py` | §10 — every condition recorded, and why it does not sum |
-| `test_condition_report.py` | §10 — the mispriced condition, direction-aware precision |
-| `test_contract.py`, `test_api.py` | §12 — the freeze, the digest, the siblings, the endpoints |
+| `test_condition_report.py` | §10 — the misprice closed, and that the instrument still finds one |
+| `test_calibration.py` | §10 — maximum-gap cutoffs, and that `basis` tells the truth |
+| `test_kpis.py` | §11 — nine tiles, denominators, deltas only against a real prior window |
+| `test_explain.py` | §13 — the scope hook, the numeric sweep, the mitigator validator |
+| `test_contract.py`, `test_api.py` | §12 — the freeze, the digest, four siblings, seven endpoints |
 | `test_predicate_safety.py` | §3.1 — six injection shapes rejected, values always bound |
 | `test_feature_runner.py` | §3.1 — every value the deleted generator code derived |
-| `test_extension_cardtesting.py` | §14 — INSERT-only extension, DDL hook |
+| `test_extension_cardtesting.py` | §14 — INSERT-only extension on a merchant, DDL hook |
+| `test_extension_refundabuse.py` | §14 — the second pattern, on a customer, AND across groups |
 | `test_migrations.py` | the five-column key, no UPSERTs, ledger idempotence |
 
 ---
@@ -283,9 +364,27 @@ Port 55432 rather than 5432 so a locally-installed PostgreSQL does not collide.
 ## Known gaps
 
 - `new_payee_then_drain` is `source_kind='sequence'`; the sequence runner is
-  Week 3. It is the single value the generator still hand-seeds, in a labelled
+  still unbuilt. It is the single value the generator hand-seeds, in a labelled
   `HAND_SEEDED_FEATURES` block. S-077's other three features are computed for
   real.
+- **Only `transaction` has a calibrated band cutoff.** `account` and `network`
+  have one scoring subject each on this dataset, and a cutoff derived from n=1 is
+  n=1 wearing a calibration's clothes. Both keep the inherited 70/45 and say
+  `UNCALIBRATED` in `score_bands.basis`, which `engine/bands.py` reads on every
+  decision. `test_calibration.py` fails if any of them stops saying so.
+- **The calibrated cutoffs change no outcome on this dataset.** 70/45 → 75/40
+  produces an identical partition; the lines moved *away* from the observed
+  scores rather than across them. That is a defensive recalibration and claiming
+  more of it would be the overstatement §16 warns about.
+- **Band cutoffs are maximum-gap, not risk-appetite.** They support "no observed
+  subject sits near this line" and nothing stronger. A cutoff that encodes an
+  appetite needs dispositions at volume, and §8's denominators here are single
+  digits.
+- **The version numbers in a case report resolve to nothing.**
+  `rule_versions` and `feature_catalog_versions` are still empty, so a stored
+  `rule_version_set` names a version with no definition behind it. The report
+  prints the numbers *and* says they do not resolve, which turns a silent audit
+  gap into a stated one — but it is still a gap.
 - `ratio` is named by §3.1 but unused by any catalogued feature, so it is
   deliberately not implemented — a spec asking for it fails loudly at compile
   time rather than returning a number nobody defined.
@@ -306,23 +405,30 @@ Port 55432 rather than 5432 so a locally-installed PostgreSQL does not collide.
   subjects have exactly one `dedup_key`, so a second *distinct* rule set never
   arrives. `test_hygiene.py` inserts one to reach the path.
 - Acceptance is checked against fixtures, not the population. §4 and §5 are
-  *demonstrated*, not stress-tested; the card-testing pass is the partial
+  *demonstrated*, not stress-tested; the two extension passes are the partial
   substitute.
-- **Deferred, in dependency order:** the deterministic copilot and case report
-  (§13, which reads `action_executions` and so had to follow it); the `sequence`
-  source kind, which would delete the last hand-seeded feature value; the
-  batch/incremental consistency test; and filling `rule_versions` /
-  `feature_catalog_versions`, so a stored `rule_version_set` resolves to
-  something. Admin write endpoints go with the console, which is out of scope.
+- **The false-negative rate is 95%, and that is the generator working.** The
+  labelled cohort was deliberately sized so most clusters fall below R-114's
+  line. A cohort the rules caught entirely would make the tile read 0% and prove
+  nothing.
+- **Still deferred:** the `sequence` source kind, which would delete the last
+  hand-seeded feature value; the batch/incremental consistency test; filling
+  `rule_versions` / `feature_catalog_versions`; and the scheduler — §15's
+  topology says "one service, one database, a scheduler" and `run_cycle.py` is
+  still run by hand, so §18's decision 6 (the async cycle period) stays open.
+  Admin write endpoints go with the console, which is out of scope.
 - `week1-data-model.md` is **superseded by the seed files** where the two
   disagree — catalog size, three `entity_type` values, and the price of
   `country_is_new_for_customer`. It is kept as a Week-1 artifact rather than
   quietly edited.
 - `architecture.md` is likewise a **planning artifact, kept unedited**; where it
-  and the code disagree, `HANDOFF.md` records why. The three that matter:
+  and the code disagree, `HANDOFF.md` records why. The four that matter:
   §12's example payload shows `triggering_events`, which lives on `queue.v1`
   because alert.v1 is frozen and has no field for it; §8's table lists a
   `delivered` execution outcome, which migration `0013`'s CHECK spells
-  `completed`; and §9 describes `open_window` as part of the dedup key, which is
+  `completed`; §9 describes `open_window` as part of the dedup key, which is
   instead applied as a predicate at fold time so that a published key does not
-  change meaning as time passes.
+  change meaning as time passes; and §13's acceptance names a report generated
+  for `TXN-48251`, which after the reprice has an empty pool and no alert — the
+  test binds to `TXN-48300`, which carries all three of T-021's mitigators and
+  the veto.

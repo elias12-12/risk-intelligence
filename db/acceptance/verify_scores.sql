@@ -39,7 +39,12 @@ SELECT s.subject_type, s.subject_id, s.role
  WHERE a.subject_type = 'network'
  ORDER BY s.role, s.subject_id;
 
-\echo '\n=== 4. Mitigating signals that kept the travel case below the line ==='
+-- Not "the travel case" any more. Seed 0026 repriced its aggravator, the pool
+-- stopped netting positive, and consolidation drops a pool the mitigators have
+-- consumed — so TXN-48251 has no signals to show at all. What survives here are
+-- the mitigators on cases that DID alert, which is the more useful demonstration
+-- anyway: evidence against acting, sitting inside a case that was raised.
+\echo '\n=== 4. Mitigating signals on cases that still reached the queue ==='
 SELECT a.subject_id, sig.contribution, sig.human_text
   FROM alerts a
   JOIN alert_signals sig ON sig.alert_id = a.alert_id

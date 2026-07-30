@@ -172,13 +172,19 @@ def test_the_most_severe_authorised_action_wins(conn, ctx):
 
 
 def test_no_authority_means_allow(conn, ctx):
-    """T-021 scores 31 against a review line of 70. An alert is raised iff a
+    """T-021 scores 0 against a review line of 70. An alert is raised iff a
     rule had AUTHORITY — not because a score landed in a band, which would put
-    this case in the queue and contradict its entire purpose."""
+    this case in the queue and contradict its entire purpose.
+
+    The score was 31 before 0026 repriced country_is_new_for_customer. The
+    assertion that matters is the last one — no alert row — and it holds for the
+    same reason it did at 31: T-021's own score never crossed its own review
+    line, so it never had authority over the action.
+    """
     result = evaluate(conn,
                       request_for(conn, ctx, "inline_sync", "transaction", "TXN-48251"),
                       ctx)
-    assert result.pool.subject_score == 31
+    assert result.pool.subject_score == 0
     assert result.outcome.authorised_rules == []
     assert result.outcome.action == "allow"
     assert fetch_one(conn, "SELECT 1 AS x FROM alerts WHERE subject_id='TXN-48251'") is None

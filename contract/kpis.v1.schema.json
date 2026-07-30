@@ -1,0 +1,610 @@
+{
+  "$defs": {
+    "KpiSet": {
+      "$defs": {
+        "KpiPart": {
+          "additionalProperties": false,
+          "description": "One component of a tile, with its own denominator.\n\nParts exist because three of the nine tiles are not scalars — a score\ndistribution, a per-rule precision and a reason-code trend are each a set of\nnumbers — and because §11's \"block / challenge / fail-open rate\" is one row\ncovering three rates whose denominators differ. Sharing a tile's denominator\nacross them would be the exact error rule 2 exists to prevent.",
+          "properties": {
+            "baseline_value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Baseline Value"
+            },
+            "delta_pct": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Delta Pct"
+            },
+            "denominator": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Denominator"
+            },
+            "label": {
+              "title": "Label",
+              "type": "string"
+            },
+            "numerator": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Numerator"
+            },
+            "unit": {
+              "default": "count",
+              "title": "Unit",
+              "type": "string"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Value"
+            }
+          },
+          "required": [
+            "label"
+          ],
+          "title": "KpiPart",
+          "type": "object"
+        },
+        "KpiTile": {
+          "additionalProperties": false,
+          "properties": {
+            "baseline_end": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Baseline End"
+            },
+            "baseline_start": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Baseline Start"
+            },
+            "baseline_value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Baseline Value"
+            },
+            "basis": {
+              "title": "Basis",
+              "type": "string"
+            },
+            "caveat": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Caveat"
+            },
+            "delta_pct": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Delta Pct"
+            },
+            "denominator": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Denominator"
+            },
+            "key": {
+              "title": "Key",
+              "type": "string"
+            },
+            "label": {
+              "title": "Label",
+              "type": "string"
+            },
+            "numerator": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Numerator"
+            },
+            "parts": {
+              "items": {
+                "$ref": "#/$defs/KpiPart"
+              },
+              "title": "Parts",
+              "type": "array"
+            },
+            "requires": {
+              "title": "Requires",
+              "type": "string"
+            },
+            "synthetic": {
+              "default": false,
+              "title": "Synthetic",
+              "type": "boolean"
+            },
+            "unit": {
+              "title": "Unit",
+              "type": "string"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Value"
+            },
+            "window_end": {
+              "format": "date-time",
+              "title": "Window End",
+              "type": "string"
+            },
+            "window_start": {
+              "format": "date-time",
+              "title": "Window Start",
+              "type": "string"
+            }
+          },
+          "required": [
+            "key",
+            "label",
+            "unit",
+            "window_start",
+            "window_end",
+            "basis",
+            "requires"
+          ],
+          "title": "KpiTile",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "as_of": {
+          "format": "date-time",
+          "title": "As Of",
+          "type": "string"
+        },
+        "baseline_absent_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Absent Reason"
+        },
+        "baseline_available": {
+          "title": "Baseline Available",
+          "type": "boolean"
+        },
+        "baseline_end": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline End"
+        },
+        "baseline_start": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Start"
+        },
+        "tiles": {
+          "items": {
+            "$ref": "#/$defs/KpiTile"
+          },
+          "title": "Tiles",
+          "type": "array"
+        },
+        "window_end": {
+          "format": "date-time",
+          "title": "Window End",
+          "type": "string"
+        },
+        "window_start": {
+          "format": "date-time",
+          "title": "Window Start",
+          "type": "string"
+        }
+      },
+      "required": [
+        "as_of",
+        "window_start",
+        "window_end",
+        "baseline_available",
+        "tiles"
+      ],
+      "title": "KpiSet",
+      "type": "object"
+    },
+    "KpiTile": {
+      "$defs": {
+        "KpiPart": {
+          "additionalProperties": false,
+          "description": "One component of a tile, with its own denominator.\n\nParts exist because three of the nine tiles are not scalars — a score\ndistribution, a per-rule precision and a reason-code trend are each a set of\nnumbers — and because §11's \"block / challenge / fail-open rate\" is one row\ncovering three rates whose denominators differ. Sharing a tile's denominator\nacross them would be the exact error rule 2 exists to prevent.",
+          "properties": {
+            "baseline_value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Baseline Value"
+            },
+            "delta_pct": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Delta Pct"
+            },
+            "denominator": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Denominator"
+            },
+            "label": {
+              "title": "Label",
+              "type": "string"
+            },
+            "numerator": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Numerator"
+            },
+            "unit": {
+              "default": "count",
+              "title": "Unit",
+              "type": "string"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Value"
+            }
+          },
+          "required": [
+            "label"
+          ],
+          "title": "KpiPart",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "baseline_end": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline End"
+        },
+        "baseline_start": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Start"
+        },
+        "baseline_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Value"
+        },
+        "basis": {
+          "title": "Basis",
+          "type": "string"
+        },
+        "caveat": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caveat"
+        },
+        "delta_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delta Pct"
+        },
+        "denominator": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Denominator"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "numerator": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Numerator"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/KpiPart"
+          },
+          "title": "Parts",
+          "type": "array"
+        },
+        "requires": {
+          "title": "Requires",
+          "type": "string"
+        },
+        "synthetic": {
+          "default": false,
+          "title": "Synthetic",
+          "type": "boolean"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "window_end": {
+          "format": "date-time",
+          "title": "Window End",
+          "type": "string"
+        },
+        "window_start": {
+          "format": "date-time",
+          "title": "Window Start",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "label",
+        "unit",
+        "window_start",
+        "window_end",
+        "basis",
+        "requires"
+      ],
+      "title": "KpiTile",
+      "type": "object"
+    }
+  },
+  "$id": "https://glassbox.local/contract/kpis.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Frozen. Generated by scripts/export_contract_schema.py from src/glassbox/contract/models.py. Do not edit by hand; a breaking change becomes kpis.v2.schema.json and v1 keeps being served.",
+  "title": "GlassBox analytics contract, version 1"
+}

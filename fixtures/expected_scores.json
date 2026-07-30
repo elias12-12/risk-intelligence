@@ -74,17 +74,20 @@
       "subject_type": "transaction",
       "subject_id": "TXN-48251",
       "lane": "inline_sync",
-      "score": 31,
+      "score": 0,
       "band": "low",
       "action": "allow",
       "alert_expected": false,
       "vetoed_by": "T-021",
-      "signals": [
-        {"feature_key": "country_is_new_for_customer", "contribution": 50},
-        {"feature_key": "recent_travel_purchase", "contribution": -9},
-        {"feature_key": "amount_vs_baseline_z", "contribution": -6},
-        {"feature_key": "entry_mode_chip_pin", "contribution": -4}
-      ]
+      "_note": [
+        "Was 31 until 0026 repriced country_is_new_for_customer from +50 to +12",
+        "on the condition report's own evidence. The pool is then 12-9-6-4 = -7,",
+        "the exoneration consumes the accusation, and consolidation drops the",
+        "pool rather than publish a negative risk score. Empty signal set, score",
+        "0 — still 'mitigating evidence keeps it out of the queue', and now with",
+        "a price the report can defend."
+      ],
+      "signals": []
     },
     {
       "name": "veto fixture: compromised card, genuine charge",
@@ -115,6 +118,8 @@
     "card_testing_merchant": "MER-TEST",
     "card_testing_declines_in_window": 22,
     "refund_abuse_customer": "CUST-REFUND",
+    "refund_abuse_refunds_in_30d": 12,
+    "refund_abuse_next_worst_customer_refunds": 6,
     "labelled_fraud_clusters": 22
   }
 }

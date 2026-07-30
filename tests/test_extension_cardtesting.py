@@ -9,35 +9,16 @@ The honest boundary, stated here and in the README: this covers a pattern whose
 feature already exists in the catalog with a reducer that already exists. A
 pattern needing a NEW reducer is a data-engineering ticket, and a pattern
 needing a subject type beyond ref_subject_type's seven is a code change.
+
+The `no_ddl` hook this uses now lives in conftest.py, shared with
+test_extension_refundabuse.py — §14's acceptance is BOTH patterns, and two
+copies of the DDL regex would be two definitions of "schema change".
 """
 from __future__ import annotations
-
-import re
-
-import psycopg
-import pytest
 
 from glassbox import config
 from glassbox.db import fetch_all, fetch_value
 from glassbox.engine.evaluation import EngineContext, run_lane
-
-DDL = re.compile(r"\b(ALTER|CREATE|DROP|TRUNCATE)\b", re.IGNORECASE)
-
-
-@pytest.fixture
-def no_ddl(monkeypatch):
-    """Record every statement and refuse to let DDL pass unnoticed."""
-    seen: list[str] = []
-    original = psycopg.Cursor.execute
-
-    def recording(self, query, params=None, **kwargs):
-        seen.append(query if isinstance(query, str) else query.decode())
-        return original(self, query, params, **kwargs)
-
-    monkeypatch.setattr(psycopg.Cursor, "execute", recording)
-    yield seen
-    offenders = [s.strip()[:120] for s in seen if DDL.search(s)]
-    assert not offenders, f"schema was modified: {offenders}"
 
 
 def test_card_testing_detects_end_to_end_via_insert_only(conn, no_ddl):

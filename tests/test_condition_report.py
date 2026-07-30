@@ -1,15 +1,23 @@
-"""§10 — the condition-level report, and the mispriced condition it must find.
+"""§10 — the condition-level report, and the misprice it found and closed.
 
-§10's acceptance names one condition: `country_is_new_for_customer` is +50, sized
+§10's acceptance named one condition: `country_is_new_for_customer` was +50, sized
 backwards so that T-021's points would sum to its displayed 31. Against a
-population, that single condition puts every genuine first trip abroad at 50 —
-mid-elevated — unless a mitigator happens to fire. A false-positive engine sitting
+population that single condition put every genuine first trip abroad at 50 —
+mid-elevated — unless a mitigator happened to fire. A false-positive engine sitting
 inside the rule whose stated purpose is demonstrating false-positive avoidance.
 
-The numbers below are re-derived from the view rather than transcribed, except the
-price (+50, which is seeded) and the ordering claim (which is the finding).
+Seed `0026` repriced it to +12 on this report's own evidence, so the tests below
+have two jobs rather than one: the misprice is gone, AND the instrument that found
+it still works. The second is the one that matters, because a report that can only
+detect a finding already applied is not a report. It is re-established by putting
+the +50 back inside a rolled-back transaction and asserting it resurfaces.
+
+Every number is re-derived from the view rather than transcribed, except the
+seeded price.
 """
 from __future__ import annotations
+
+import condition_report
 
 from glassbox.db import fetch_all, fetch_one, fetch_value
 
@@ -19,28 +27,67 @@ def _by_feature(conn) -> dict[str, dict]:
         conn, "SELECT * FROM v_condition_performance")}
 
 
-def test_the_report_finds_the_mispriced_condition(conn):
-    rows = fetch_all(conn, "SELECT * FROM v_condition_performance "
-                           "WHERE direction = 'aggravating' "
-                           "  AND points_per_precision_point IS NOT NULL")
-    assert rows, "the view orders by cost per precision point, worst first"
+def _rows(conn) -> list[dict]:
+    return fetch_all(conn, "SELECT * FROM v_condition_performance")
 
-    worst = rows[0]
-    assert worst["feature_key"] == "country_is_new_for_customer", (
-        "§10 names this condition; if something else is now worse, that is a "
-        "finding to report, not a test to relax")
-    assert worst["priced_points"] == 50
-    assert worst["fired"] > 100, "it has to fire often enough for the finding to bite"
-    assert float(worst["precision_pct"]) < 15.0
 
-    # The comparison that makes it a misprice rather than merely a weak signal:
-    # the other two population-scale aggravators earn far more per point.
-    others = [r for r in rows[1:] if r["fired"] >= 20]
-    assert others
-    assert all(float(worst["points_per_precision_point"])
-               > 3 * float(r["points_per_precision_point"]) for r in others), (
-        "the whole finding is that this condition costs multiples more per unit of "
-        "measured precision than any comparably-sampled aggravator")
+def test_the_misprice_the_report_found_has_been_closed(conn):
+    """0026, checked against the view rather than against the seed file."""
+    country = _by_feature(conn)["country_is_new_for_customer"]
+    assert country["priced_points"] == 12, (
+        "0026 repriced this condition; if it reads 50 the seed did not apply")
+    assert country["fired"] > 100, "still fires at population scale — that is why "\
+                                   "its price mattered"
+    assert float(country["precision_pct"]) < 15.0, (
+        "and still earns single-digit precision; the reprice corrected the PRICE, "
+        "not the signal, which is the honest limit of what calibration can do")
+
+    worst, benchmark, anchor, ratio = condition_report.cost_anchor(_rows(conn))
+    assert ratio is not None and anchor
+    assert ratio < condition_report.MATERIAL, (
+        f"{worst['feature_key']} costs {ratio:.1f}x the catalog median per unit of "
+        f"measured precision; §10 says that is a finding to act on, not to pin")
+
+
+def test_the_report_would_still_find_a_misprice(conn):
+    """The instrument, not the finding.
+
+    Restore the +50 inside the rolled-back test transaction. It must climb back
+    to the top of the ranking and cross the materiality threshold — which is what
+    makes the passing state above a measurement rather than a tautology.
+    """
+    before_worst, _, _, before_ratio = condition_report.cost_anchor(_rows(conn))
+    assert before_ratio < condition_report.MATERIAL
+
+    with conn.cursor() as cur:
+        cur.execute("UPDATE rule_conditions SET contribution_points = 50 "
+                    "WHERE rule_id = 'T-021' "
+                    "  AND feature_key = 'country_is_new_for_customer'")
+
+    worst, _, _, ratio = condition_report.cost_anchor(_rows(conn))
+    assert worst["feature_key"] == "country_is_new_for_customer"
+    assert ratio >= condition_report.MATERIAL, (
+        "at +50 this condition must read as materially mispriced; if it does not, "
+        "the report can no longer detect the finding it was built to produce")
+    assert ratio > before_ratio
+
+
+def test_the_anchor_is_the_median_not_the_cheapest_condition(conn):
+    """Anchoring on the cheapest condition anchors on a fixture.
+
+    Four conditions fire only on the planted cases, where 100% precision is a
+    property of the fixture and not a measurement. The median of the
+    comparably-sampled aggravators is the price this catalog actually charges,
+    and it is what a repricing has to be argued against.
+    """
+    rows = _rows(conn)
+    _, benchmark, anchor, _ = condition_report.cost_anchor(rows)
+    costs = sorted(float(r["points_per_precision_point"]) for r in benchmark)
+    assert len(benchmark) >= 2
+    assert all(r["fired"] >= condition_report.MIN_SAMPLE for r in benchmark), (
+        "a precision over a handful of firings is an anecdote, not a benchmark")
+    assert anchor > costs[0], "the anchor must not collapse onto the cheapest peer"
+    assert costs[0] <= anchor <= costs[-1]
 
 
 def test_precision_is_measured_per_direction(conn):
@@ -68,7 +115,8 @@ def test_precision_is_measured_per_direction(conn):
 def test_a_veto_rules_conditions_are_still_measurable(conn):
     """T-021 is is_veto, so precedence.decide never lets it authorise a case and it
     can never produce a case_outcomes row of its own. Its conditions still get a
-    LABEL precision, which is the only reason the +50 misprice is findable at all.
+    LABEL precision, which is the only reason the +50 misprice was findable at all
+    — and the only reason a future one on a veto rule would be.
 
     Its alert precision, where it exists, is the disposition of a case some OTHER
     rule raised on a decision T-021 was evaluated on. Recorded here so the column
@@ -88,9 +136,12 @@ def test_a_veto_rules_conditions_are_still_measurable(conn):
 def test_the_report_never_writes(conn):
     """§10: calibration output is a recommendation to a human, never an automatic
     write. Silently retuned weights break the audit story — an analyst could not
-    explain why last week's identical transaction scored differently."""
-    import condition_report
+    explain why last week's identical transaction scored differently.
 
+    0026 applied the report's finding — by hand, as a reviewed seed file. That is
+    the distinction this test exists to keep: the report may recommend +12, and a
+    human writes the UPDATE.
+    """
     before = fetch_all(conn, "SELECT condition_id, contribution_points "
                              "FROM rule_conditions ORDER BY condition_id")
     source = __import__("inspect").getsource(condition_report).upper()

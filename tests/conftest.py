@@ -13,6 +13,7 @@ against a second, parallel set of them.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -74,6 +75,35 @@ def conn(built_database: str):
 @pytest.fixture
 def ctx(conn) -> EngineContext:
     return EngineContext.load(conn)
+
+
+DDL = re.compile(r"\b(ALTER|CREATE|DROP|TRUNCATE)\b", re.IGNORECASE)
+
+
+@pytest.fixture
+def no_ddl(monkeypatch):
+    """§14's hook: record every statement, and refuse to let DDL pass unnoticed.
+
+    The README claims a new detection pattern costs rows, not code. A paragraph
+    cannot establish that, so both extension tests run their whole body under
+    this fixture and fail if any statement is DDL.
+
+    It lives here rather than in one of the two test modules because there are
+    now two of them, and a second copy of the regex is a second definition of
+    "schema change" — the same argument the repo makes about the fire verdict
+    being computed in exactly one place.
+    """
+    seen: list[str] = []
+    original = psycopg.Cursor.execute
+
+    def recording(self, query, params=None, **kwargs):
+        seen.append(query if isinstance(query, str) else query.decode())
+        return original(self, query, params, **kwargs)
+
+    monkeypatch.setattr(psycopg.Cursor, "execute", recording)
+    yield seen
+    offenders = [s.strip()[:120] for s in seen if DDL.search(s)]
+    assert not offenders, f"schema was modified: {offenders}"
 
 
 @pytest.fixture(scope="session")
