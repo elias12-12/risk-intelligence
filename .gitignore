@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.env
+
+# Generated: reproducible from scripts/generate_synthetic.py at a fixed seed.
+fixtures/synthetic_data.sql

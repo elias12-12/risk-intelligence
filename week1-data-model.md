@@ -1,3 +1,8 @@
+
+> **Superseded.** Where this document and the seed files under `db/seeds/` disagree
+> — catalog size (22 vs 21), three `entity_type` values, and the price of
+> `country_is_new_for_customer` (+16 vs +50) — **the seeds are authoritative**.
+> Kept unedited as a Week-1 artifact. See README "Known gaps".
 # Risk Intelligence & Fraud Detection Platform
 ## Week 1 Deliverable — Data Model & Synthetic-Data Spec
 
