@@ -45,6 +45,13 @@ def test_deleting_a_member_changes_the_alert(conn):
     with conn.cursor() as cur:
         cur.execute("DELETE FROM cluster_members "
                     "WHERE cluster_id='RING-1187' AND subject_id='ACC-7745'")
+        # §9: the session fixture already left an OPEN alert on RING-1187, and a
+        # re-evaluation now folds onto it rather than raising a second one — which
+        # is the entire point of alert hygiene. Coverage is derived when a case is
+        # RAISED, so this test needs the open case closed to observe it. Folding
+        # deliberately never rewrites alert_subjects: a member the builder has
+        # since retired was still part of the case an analyst has been reading.
+        cur.execute("UPDATE alerts SET status='resolved' WHERE subject_id='RING-1187'")
 
     run_lane(conn, "async", config.reference_now(), run_id="deleted",
              subject_ids=["RING-1187"], ctx=EngineContext.load(conn))

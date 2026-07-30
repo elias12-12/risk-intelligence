@@ -32,8 +32,13 @@ def main() -> int:
                           subject_ids=args.subject, ctx=ctx)
         conn.commit()
     print(f"lane={args.lane}  as_of={as_of.isoformat()}  {time.perf_counter() - t0:.1f}s")
-    for k in ("evaluations", "decisions", "alerts", "signals"):
-        print(f"  {k:<12} {totals[k]}")
+    # Printed in pipeline order, and every key run_lane reports is printed —
+    # a new counter should show up here without an edit.
+    order = ("evaluations", "decisions", "conditions", "alerts", "folded",
+             "restated", "suppressed", "signals", "executions")
+    for k in list(order) + [k for k in totals if k not in order]:
+        if k in totals:
+            print(f"  {k:<12} {totals[k]}")
     return 0
 
 

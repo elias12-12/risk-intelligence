@@ -288,7 +288,10 @@ def run_lane(conn: psycopg.Connection, lane: str, as_of: datetime,
         if persist:
             written = persist_mod.write_batch(conn, results)
             for k, v in written.items():
-                totals[k] += v
+                # setdefault, not `+=`: write_batch reports folds, suppressions,
+                # ledger rows and executions, and a writer that learns to count
+                # something new should not have to be matched by an edit here.
+                totals[k] = totals.get(k, 0) + v
     return totals
 
 

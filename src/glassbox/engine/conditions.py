@@ -28,6 +28,7 @@ from typing import Any
 
 from ..types import (
     DEGRADED_STATUSES,
+    ConditionOutcome,
     FeatureRead,
     FiredCondition,
     Rule,
@@ -106,7 +107,13 @@ def evaluate_rule(rule: Rule, reads: dict[str, FeatureRead]) -> RuleEvaluation:
             # missing. Only the second is a degradation worth recording.
             resolved_any = True
 
-        if read.status == "present" and fires(cond, read.value):
+        # Computed ONCE. Every downstream consumer — the signal pool, the score,
+        # and §10's condition ledger — reads this verdict rather than recomputing
+        # it, so there is exactly one implementation of "did this condition fire".
+        hit = read.status == "present" and fires(cond, read.value)
+        ev.evaluated.append(ConditionOutcome(cond, read, hit))
+
+        if hit:
             ev.fired.append(FiredCondition(cond, read, render(cond, read)))
             if cond.is_required:
                 groups.setdefault(cond.condition_group, []).append(True)

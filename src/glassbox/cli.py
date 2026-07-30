@@ -12,6 +12,8 @@ COMMANDS = {
     "generate": "generate_synthetic.py",
     "features": "run_features.py",
     "cycle": "run_cycle.py",
+    "resolve": "resolve_actions.py",
+    "report": "condition_report.py",
     "contract": "export_contract_schema.py",
 }
 

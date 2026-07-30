@@ -20,18 +20,30 @@ function Step($text) { Write-Host "`n=== $text ===" -ForegroundColor Cyan }
 
 if (-not $SkipDocker) {
     Step 'Docker'
+    $oldErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+
     docker info *> $null
-    if (-not $?) {
+    $dockerOk = ($LASTEXITCODE -eq 0)
+
+    $ErrorActionPreference = $oldErrorAction
+
+    if (-not $dockerOk) {
         Write-Host 'Docker daemon is not running. Starting Docker Desktop...' -ForegroundColor Yellow
         $exe = 'C:\Program Files\Docker\Docker\Docker Desktop.exe'
         if (-not (Test-Path $exe)) { throw "Docker Desktop not found at $exe" }
         Start-Process $exe
         $deadline = (Get-Date).AddMinutes(3)
+        $ErrorActionPreference = 'Continue'
         do {
             Start-Sleep -Seconds 5
             docker info *> $null
-            $up = $?
+            # $LASTEXITCODE, not $?: under ErrorActionPreference='Stop' a native
+            # command writing to stderr makes $? unreliable, so the wait loop
+            # could exit on the first poll and then fail on a healthy daemon.
+            $up = ($LASTEXITCODE -eq 0)
         } while (-not $up -and (Get-Date) -lt $deadline)
+        $ErrorActionPreference = $oldErrorAction
         if (-not $up) { throw 'Docker did not become ready within three minutes.' }
     }
     docker compose up -d
@@ -66,6 +78,18 @@ Step 'Decisioning — both lanes'
 python scripts/run_cycle.py --lane inline_sync
 python scripts/run_cycle.py --lane async
 
+Step 'Actions — settle outcomes, disposition cases'
+python scripts/resolve_actions.py
+
+# The loop that closes: the system's own actions become an input to the next
+# decision. challenge_failed events exist only after the step above, so the
+# feature has to be recomputed before a cycle can read it.
+Step 'Feature loop — the system reads its own actions'
+python scripts/run_features.py --no-graph --feature card_challenge_fails_30d
+
+Step 'Condition performance — §10'
+python scripts/condition_report.py
+
 Step 'Published contract'
 python scripts/export_contract_schema.py
 python scripts/export_expectations.py
@@ -80,5 +104,7 @@ Write-Host @'
 Next:
   psql "$env:GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   human-readable proof
   python -m glassbox serve                                      read API on :8000
-  curl http://127.0.0.1:8000/alerts
+  curl http://127.0.0.1:8000/alerts                             alert.v1
+  curl http://127.0.0.1:8000/queue                              queue.v1, priority-ordered
+  curl http://127.0.0.1:8000/alerts/1/executions                executions.v1
 '@ -ForegroundColor Green

@@ -19,8 +19,10 @@ it does not encode any particular pattern.
 
 That starts Docker Desktop if needed, brings up PostgreSQL 16, installs
 dependencies, generates fixtures, migrates and seeds, computes the feature
-layer, runs both decisioning lanes, exports the published contract and runs the
-acceptance suite. Roughly three minutes cold.
+layer, runs both decisioning lanes, settles the actions they issued, feeds the
+outcomes back in as a feature, prints the condition-performance report, exports
+the published contracts and runs the acceptance suite. Roughly three minutes
+cold.
 
 Step by step:
 
@@ -34,9 +36,12 @@ python scripts/generate_synthetic.py        # fixtures/synthetic_data.sql
 python scripts/reset_db.py                  # migrate + seed + load + features
 python scripts/run_cycle.py --lane inline_sync
 python scripts/run_cycle.py --lane async
+python scripts/resolve_actions.py           # settle challenges, disposition cases
+python scripts/run_features.py --no-graph --feature card_challenge_fails_30d
+python scripts/condition_report.py          # which conditions are mispriced
 
 psql "$GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   # 87 / 68 / 64 / 58 / 31
-pytest                                                    # 104 tests
+pytest                                                    # 149 tests
 python -m glassbox serve                                  # read API on :8000
 ```
 
@@ -64,6 +69,12 @@ Alongside them sits a scored population: ~9,800 transactions, ~300 declines,
 ~120 refunds, a 22-decline card-testing burst, a refund-abuse customer and 22
 labelled fraud clusters deliberately sized so most fall *below* R-114's line.
 
+Every one of those 9,923 decisions records what became of it — `raised`,
+`folded`, `restated`, `suppressed` or `no_authority` — and every condition it
+evaluated, fired or not: 79,068 ledger rows. That is what turns "alert volume"
+from a count of evaluation cycles into a count of cases, and what makes "which
+conditions are mispriced" a query rather than a guess.
+
 ---
 
 ## How it fits together
@@ -74,10 +85,15 @@ db/migrations/  0001-0008  Week 1 schema, unchanged
                 0012       decision detail: evaluation, veto, prevention, versions
                 0013       version stores, action executions, clusters
                 0014       bitemporal feature_values  (the one non-additive migration)
+                0023       alert routing, fold state, exposure, condition ledger
 db/seeds/       0009-0010  the catalog and the four rules
                 0015-0021  21 computable specs, 11 resolution edges, rule policy,
                            score bands, novelty baselines, driver filters
-db/views/       v_alert_invariants.sql
+                0024-0025  hygiene policy + action routing; the challenge-history
+                           feature (INSERTs only — no engine change)
+db/views/       v_alert_invariants.sql       sum(signals) == score
+                v_decision_routing.sql       the routing invariant 0023 could not CHECK
+                v_condition_performance.sql  §10: cost per unit of precision
 db/acceptance/  verify_scores.sql          read-only; no hardcoded subject ids
 
 src/glassbox/
@@ -88,14 +104,19 @@ src/glassbox/
   graph/      builder.py    clusters from the link layer
   engine/     resolver.py   subject -> entity, over a stored graph
               pit.py        the point-in-time read
-              conditions.py fire / degrade
+              conditions.py fire / degrade, and record the verdict once
               scoring.py    per-rule score, before dedup
               consolidate.py one signal per (feature, direction)
               precedence.py veto -> authority -> severity -> prevention -> cap
-              persist.py    one decision; 0-or-1 alerts
+              exposure.py   money at risk, bounded at the decision's PIT bound
+              persist.py    one decision; the condition ledger; fold/restate/suppress
+              execute.py    issue what was authorised, once per case
+              outcomes.py   settle challenges, disposition cases (synthetic)
               evaluation.py the order, which is the design
-  contract/   models.py     the frozen read contract
-  api/        two read endpoints
+  contract/   models.py     alert.v1 — frozen, digest-pinned
+              queue.py      queue.v1 — priority, with its factors published
+              executions.py executions.v1 — what was done, and its synthetic flag
+  api/        four read endpoints
 ```
 
 The pipeline order, in one line each:
@@ -110,7 +131,10 @@ The pipeline order, in one line each:
 8. **Consolidate** — one signal per `(feature_key, direction)`.
 9. **Band** — from `score_bands`, per subject type.
 10. **Precedence** — veto, authority, severity, prevention, cap.
-11. **Persist** — one decision per (subject, lane, evaluation); an alert iff a rule had authority.
+11. **Persist** — one decision per (subject, lane, evaluation), plus every condition it looked at.
+12. **Route** — fold onto an open case, restate it, suppress under an investigation, or raise.
+13. **Issue** — preventive actions on a raised case only; notifications also on a restatement.
+14. **Settle** — outcomes back onto the executions, dispositions onto the cases, events into the log.
 
 ---
 
@@ -138,10 +162,50 @@ true, `computed_at` is when we learned it. A recomputation is an INSERT. Never
 write `ON CONFLICT … DO UPDATE` against that table — it silently destroys the
 value a past decision was made on, and a test greps for it.
 
-**The read contract is frozen.** `contract/alert.v1.schema.json` is generated
-from `src/glassbox/contract/models.py` and committed; a test regenerates it in
-memory and asserts byte-equality. Never edit it by hand — a breaking change
-becomes `alert.v2.schema.json` and v1 keeps being served.
+**The read contract is frozen, and the freeze is enforced by a digest.**
+`contract/alert.v1.schema.json` is generated from
+`src/glassbox/contract/models.py` and committed; a test regenerates it in memory
+and asserts byte-equality *and* checks its sha256. Byte-equality alone passes if
+you change a model and re-run the exporter, so the digest is what makes the
+freeze real. Never edit it by hand — a breaking change becomes
+`alert.v2.schema.json` and v1 keeps being served.
+
+**New read surfaces are siblings, not new versions.** `queue.v1` and
+`executions.v1` publish what alert hygiene and action execution produced —
+`triggering_events`, exposure, priority, challenge outcomes — without touching a
+byte of alert.v1. `Subject`, `Signal`, `Action` and `Evidence` live inside
+alert.v1's `$defs` closure, so adding a field to any of them for the queue's
+benefit would break the digest. That is why `models.py` was left alone.
+
+**One case, many triggering events.** An alert carries a `dedup_key`, and a
+repeat evaluation inside the subject type's `open_window` folds onto it instead
+of raising a second case. Running the async cycle N times over a static dataset
+produces the same alert count for every N — before this, every run inserted a
+new row. If the repeat scores *higher*, the case is **restated**: it re-points at
+the worse evaluation and its signal set is replaced in the same operation, never
+one without the other, because an alert's signals must always be exactly one
+decision's pool or the score bar stops adding up.
+
+**The queue order explains itself.** `priority = score × exposure × recency`,
+with all three factors and the formula published on every entry. Exposure is
+log-damped (amount spans orders of magnitude, so undamped it decides the order
+alone), floored (an unpriced alert must stay reachable), and bounded at the
+decision's point-in-time bound rather than `now()` — an unbounded exposure would
+drift on every recomputation and make the ordering depend on the wall clock. On
+the shipped fixtures a 58 with $11,050 at risk outranks a 68 with $33.50.
+
+**Precision is measured per direction.** A mitigator is right when it fires on
+*legitimate* traffic — that is its job. `v_condition_performance` scores an
+aggravator by its fraud rate and a mitigator by its legitimate rate, because a
+direction-blind precision ranks `entry_mode_chip_pin` — 9,562 firings, never once
+on fraud — as the worst condition in the catalog rather than the best. Same
+inversion §5 objects to when an absent mitigator is treated as a non-firing one.
+
+**Nothing is challenged twice for the same situation.** Preventive actions are
+issued when a case is *raised*, not when it folds; a notification goes out again
+on a restatement. A ring re-evaluated every fifteen minutes would otherwise send
+the customer 96 step-ups a day, and "block rate" counted off decisions would be
+double the number of customers actually affected.
 
 ---
 
@@ -173,7 +237,7 @@ and it is worth saying so out loud.
 ## Tests
 
 ```bash
-pytest                       # 104 tests, ~35s including a full rebuild
+pytest                       # 149 tests, ~85s including a full rebuild
 pytest tests/test_degraded.py -v
 ```
 
@@ -192,7 +256,11 @@ a test that mutates rules or catalog rows cannot leak.
 | `test_degraded.py` | §5 — the mitigator policy and the narrowed veto clause |
 | `test_consolidation.py` | §6 — one decision, signals that add up, order invariance |
 | `test_precedence.py` | §7 — veto cap, demotion, deterministic ties |
-| `test_contract.py`, `test_api.py` | §12 — the freeze, the invariants, the endpoints |
+| `test_execution.py` | §8 — issuance, settlement, determinism, the outcome-fed feature |
+| `test_hygiene.py` | §9 — N runs / one case, restatement, suppression, exposure |
+| `test_conditions_ledger.py` | §10 — every condition recorded, and why it does not sum |
+| `test_condition_report.py` | §10 — the mispriced condition, direction-aware precision |
+| `test_contract.py`, `test_api.py` | §12 — the freeze, the digest, the siblings, the endpoints |
 | `test_predicate_safety.py` | §3.1 — six injection shapes rejected, values always bound |
 | `test_feature_runner.py` | §3.1 — every value the deleted generator code derived |
 | `test_extension_cardtesting.py` | §14 — INSERT-only extension, DDL hook |
@@ -221,12 +289,40 @@ Port 55432 rather than 5432 so a locally-installed PostgreSQL does not collide.
 - `ratio` is named by §3.1 but unused by any catalogued feature, so it is
   deliberately not implemented — a spec asking for it fails loudly at compile
   time rather than returning a number nobody defined.
-- `action_executions` is a table with no machinery behind it; issuing and
-  resolving actions is Week 3.
+- **Challenge outcomes are synthetic.** Nothing external answers a step-up here,
+  so `scripts/resolve_actions.py` settles them deterministically against
+  `transactions.synthetic_label`. Every such row is stamped `synthetic = TRUE`,
+  and `executions.v1` puts the flag on the wire so no surface can present a
+  synthetic pass rate as a measured one.
+- **§8's denominators are single digits.** A full pass authorises four challenges
+  and two holds, so prevention precision is n=4. Every rate the resolver prints
+  carries its denominator for that reason.
+- **The prevention-false-positive count is zero, and that is a result.** All six
+  preventive actions land on fraud-labelled subjects, so no challenge passes and
+  nothing is dispositioned `confirmed_legit`. The join §8 exists for works — it
+  simply has nothing to find on this dataset, and `test_execution.py` exercises it
+  on a constructed case rather than pretending otherwise.
+- **Suppression is unreachable on the shipped fixtures.** All seven alerting
+  subjects have exactly one `dedup_key`, so a second *distinct* rule set never
+  arrives. `test_hygiene.py` inserts one to reach the path.
 - Acceptance is checked against fixtures, not the population. §4 and §5 are
   *demonstrated*, not stress-tested; the card-testing pass is the partial
   substitute.
+- **Deferred, in dependency order:** the deterministic copilot and case report
+  (§13, which reads `action_executions` and so had to follow it); the `sequence`
+  source kind, which would delete the last hand-seeded feature value; the
+  batch/incremental consistency test; and filling `rule_versions` /
+  `feature_catalog_versions`, so a stored `rule_version_set` resolves to
+  something. Admin write endpoints go with the console, which is out of scope.
 - `week1-data-model.md` is **superseded by the seed files** where the two
   disagree — catalog size, three `entity_type` values, and the price of
   `country_is_new_for_customer`. It is kept as a Week-1 artifact rather than
   quietly edited.
+- `architecture.md` is likewise a **planning artifact, kept unedited**; where it
+  and the code disagree, `HANDOFF.md` records why. The three that matter:
+  §12's example payload shows `triggering_events`, which lives on `queue.v1`
+  because alert.v1 is frozen and has no field for it; §8's table lists a
+  `delivered` execution outcome, which migration `0013`'s CHECK spells
+  `completed`; and §9 describes `open_window` as part of the dedup key, which is
+  instead applied as a predicate at fold time so that a published key does not
+  change meaning as time passes.

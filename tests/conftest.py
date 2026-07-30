@@ -26,6 +26,7 @@ sys.path.insert(0, str(REPO / "scripts"))
 
 from glassbox import config                                      # noqa: E402
 from glassbox.engine.evaluation import EngineContext, run_lane   # noqa: E402
+from glassbox.engine.outcomes import settle                      # noqa: E402
 
 import reset_db                                                  # noqa: E402
 
@@ -47,6 +48,15 @@ def built_database(test_dsn: str) -> str:
         ctx = EngineContext.load(conn)
         for lane in ("inline_sync", "async"):
             run_lane(conn, lane, config.reference_now(), run_id="testrun", ctx=ctx)
+        # §8 is part of the pipeline now: issuing happens inside run_lane, and
+        # settling the issued actions is what makes prevention measurable. One
+        # pass, exactly as bootstrap.ps1 does it.
+        #
+        # Note for anyone extending this: settle() dispositions every open case,
+        # and §9 suppression only applies to UNDISPOSITIONED cases — so a test
+        # that needs to observe suppression has to reopen one. test_hygiene.py
+        # does exactly that, and says so.
+        settle(conn)
         conn.commit()
     return test_dsn
 

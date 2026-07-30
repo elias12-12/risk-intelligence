@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from ..types import RuleScore, Signal, SignalPool
+from ..types import RuleScore, Signal, SignalPool, jsonable
 
 
 def consolidate(rule_scores: list[RuleScore]) -> SignalPool:
@@ -40,7 +40,7 @@ def consolidate(rule_scores: list[RuleScore]) -> SignalPool:
                     reason_code=cond.reason_code,
                     source_rule_id=cond.rule_id,
                     asserted_by_rules=[cond.rule_id],
-                    feature_value=_jsonable(fired.read.value),
+                    feature_value=jsonable(fired.read.value),
                     value_as_of=fired.read.as_of,
                     value_computed_at=fired.read.computed_at,
                 )
@@ -55,7 +55,7 @@ def consolidate(rule_scores: list[RuleScore]) -> SignalPool:
                 existing.human_text = fired.human_text
                 existing.reason_code = cond.reason_code
                 existing.source_rule_id = cond.rule_id
-                existing.feature_value = _jsonable(fired.read.value)
+                existing.feature_value = jsonable(fired.read.value)
                 existing.value_as_of = fired.read.as_of
                 existing.value_computed_at = fired.read.computed_at
 
@@ -80,9 +80,3 @@ def consolidate(rule_scores: list[RuleScore]) -> SignalPool:
 
     return SignalPool(signals=signals,
                       subject_score=sum((s.contribution for s in signals), Decimal(0)))
-
-
-def _jsonable(value):
-    if isinstance(value, Decimal):
-        return float(value)
-    return value

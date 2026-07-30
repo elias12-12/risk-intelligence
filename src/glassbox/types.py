@@ -42,6 +42,18 @@ def parse_window(spec: str | None) -> timedelta | None:
     return timedelta(**{_WINDOW_UNITS[m.group(2).lower()]: int(m.group(1))})
 
 
+def jsonable(value: Any) -> Any:
+    """Decimal -> float, for a value on its way into a JSONB column.
+
+    Lives here rather than in one writer because both the signal pool and the
+    condition ledger store the value a condition actually saw, and two copies of
+    this would be two chances to store 'Decimal("4")'.
+    """
+    if isinstance(value, Decimal):
+        return float(value)
+    return value
+
+
 # ---------------------------------------------------------------- subjects
 @dataclass(frozen=True)
 class Subject:
@@ -174,6 +186,20 @@ class FiredCondition:
     human_text: str
 
 
+@dataclass(frozen=True)
+class ConditionOutcome:
+    """Every condition the engine looked at, fired or not (§10).
+
+    `fired` is recorded here, at the one place the verdict is computed, rather
+    than re-derived by whoever writes the ledger. A second call to fires() would
+    be a second implementation of the firing rule, which is the divergence §3.1
+    argues about at length — and it would be invisible until the two disagreed.
+    """
+    condition: RuleCondition
+    read: FeatureRead
+    fired: bool
+
+
 @dataclass
 class RuleEvaluation:
     rule_id: str
@@ -183,6 +209,12 @@ class RuleEvaluation:
     preventive_authority: bool = True
     veto_established: bool | None = False   # None = indeterminate
     reads: dict[str, FeatureRead] = field(default_factory=dict)
+    # Every condition visited, in catalog order. Superset of `fired`: it also
+    # carries the ones that resolved and did not fire, and the ones whose
+    # evidence never arrived — neither of which `reads` can reconstruct, because
+    # evaluate_rule synthesises an 'absent' read for a feature with no spec and
+    # never writes it back.
+    evaluated: list[ConditionOutcome] = field(default_factory=list)
 
 
 @dataclass
