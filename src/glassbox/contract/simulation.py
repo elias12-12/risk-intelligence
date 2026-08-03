@@ -30,7 +30,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from ..engine.simulate import DEFAULT_SAMPLE_CAP, SAMPLING_BASIS
 from ..types import jsonable
+from .catalog import RuleDraft
 from .models import Action, ContractViolation, Evidence, Signal, Subject
 
 STRICT = ConfigDict(extra="forbid", frozen=True)
@@ -185,6 +187,378 @@ def _trace(rule_score, rule, outcome) -> RuleTrace:
     )
 
 
+# ------------------------------------------------------------------ rule what-if
+RULE_BASIS = (
+    "A candidate rule applied to the control plane inside a transaction that is "
+    "rolled back, then the engine's own pipeline over stored rows. No rule, "
+    "condition, decision, alert, signal or execution was written. Every count "
+    "below is over subjects_evaluated, which is not the population — see "
+    "population.basis."
+)
+
+HYGIENE_CAVEAT = (
+    "would_alert counts EVALUATIONS that would raise a case, not cases. §9's "
+    "hygiene — folding a repeat onto an open case, restating it, suppressing "
+    "under an investigation — happens at persist time, and nothing is persisted "
+    "here. On a subject that already has an open case the real cycle would fold "
+    "rather than raise, so this is an upper bound on new cases."
+)
+
+GROUND_TRUTH_CAVEAT = (
+    "Measured against transactions.synthetic_label on the row that triggered "
+    "each evaluation. Planted ground truth: exact on this dataset and "
+    "meaningless outside it."
+)
+
+
+class SampledPopulation(BaseModel):
+    """What was actually evaluated, and what it was drawn from.
+
+    The cap is published as the denominator rather than applied silently,
+    because a rate whose denominator is a sample and does not say so is the same
+    unearned claim §11 refuses on a KPI tile.
+    """
+    model_config = STRICT
+
+    subject_type: str
+    lane: str
+    as_of: datetime
+    subjects_available: int
+    subjects_evaluated: int
+    sample_cap: int
+    truncated: bool
+    basis: str
+
+
+class ScoreDistribution(BaseModel):
+    model_config = STRICT
+
+    scored: int                              # subjects whose pooled score > 0
+    bands: dict[str, int] = Field(default_factory=dict)
+    min_score: Decimal | None = None
+    median_score: Decimal | None = None
+    max_score: Decimal | None = None
+
+
+class GroundTruth(BaseModel):
+    """Both numbers, never just the rate."""
+    model_config = STRICT
+
+    labelled: int = 0
+    flagged: int = 0
+    flagged_labelled: int = 0
+    flagged_on_fraud: int = 0
+    precision_pct: Decimal | None = None
+    caveat: str = GROUND_TRUTH_CAVEAT
+
+
+class ConditionOutcomeSummary(BaseModel):
+    """One condition of the candidate, measured over the sample.
+
+    The stored `condition_id` is deliberately absent: a draft's conditions are
+    inserted inside the rolled-back scope, so their ids are real for the length
+    of one transaction and mean nothing afterwards. Publishing one would be
+    publishing a key that resolves to a different row, or to none.
+    """
+    model_config = STRICT
+
+    condition_group: int
+    feature_key: str
+    operator: str
+    threshold: str | None = None
+    contribution_points: Decimal
+    direction: str
+    is_required: bool = True
+
+    evaluated: int = 0
+    fired: int = 0
+    degraded: int = 0
+    fire_rate_pct: Decimal | None = None
+    fired_labelled: int = 0
+    fired_on_fraud: int = 0
+    precision_pct: Decimal | None = None      # direction-aware, as §10 measures it
+
+
+class WorkedExample(BaseModel):
+    model_config = STRICT
+
+    subject_id: str
+    occurred_at: datetime | None = None
+    score: Decimal
+    band: str
+    action: str
+    action_source_rule: str | None = None
+    would_alert: bool
+    label: str | None = None
+    signals: list[Signal] = Field(default_factory=list)
+
+
+class DecisionDiff(BaseModel):
+    """A subject whose stored decision and simulated decision disagree.
+
+    `stored_*` is null where the subject has no stored decision for this lane —
+    which is not a change of mind, it is the rule reaching something nothing
+    reached before, and `change` says which of the two it is.
+    """
+    model_config = STRICT
+
+    subject_id: str
+    change: str                        # new | score | action | score+action
+    stored_score: Decimal | None = None
+    simulated_score: Decimal
+    stored_action: str | None = None
+    simulated_action: str
+    stored_source_rule: str | None = None
+    simulated_source_rule: str | None = None
+
+
+class RuleSimulation(BaseModel):
+    """What a candidate rule WOULD do, with nothing written down.
+
+    Published as part of simulation.v1 rather than catalog.v1 because it is a
+    simulation: the guarantee it carries is `persisted: false`, and that
+    guarantee is what this contract is for.
+    """
+    model_config = STRICT
+
+    persisted: Literal[False] = False
+    rule_id: str
+    rule_name: str
+    mode: str                          # draft | replacement
+    status: str
+    action: str
+    review_threshold: Decimal
+    prevent_threshold: Decimal | None = None
+
+    population: SampledPopulation
+
+    would_fire: int = 0                # the candidate was satisfied and scored
+    would_authorise: int = 0           # ...and crossed its own review threshold
+    would_carry_action: int = 0        # ...and carried the action after precedence
+    would_alert: int = 0               # the evaluation would raise a case at all
+    hygiene_caveat: str = HYGIENE_CAVEAT
+
+    distribution: ScoreDistribution
+    ground_truth: GroundTruth
+    conditions: list[ConditionOutcomeSummary] = Field(default_factory=list)
+    examples: list[WorkedExample] = Field(default_factory=list)
+
+    diff_total: int = 0
+    diff_new: int = 0
+    diff_score_changed: int = 0
+    diff_action_changed: int = 0
+    diff: list[DecisionDiff] = Field(default_factory=list)
+
+    basis: str = RULE_BASIS
+
+
+def to_rule_simulation(whatif, examples: int = 5,
+                       diff_limit: int = 25) -> RuleSimulation:
+    """`RuleWhatIf` -> the published shape.
+
+    Duck-typed rather than imported: `engine.simulate` imports this package's
+    `RuleDraft`, so naming its dataclass here would close the cycle.
+    """
+    from ..engine.persist import ranked_signals
+
+    draft = whatif.draft
+    rule_id = draft.rule_id
+    scored: list[Decimal] = []
+    bands: dict[str, int] = {}
+    per_condition: dict[tuple, dict] = {}
+    counts = {"fire": 0, "authorise": 0, "carry": 0, "alert": 0}
+    flagged = flagged_labelled = flagged_on_fraud = labelled = 0
+    chosen: list = []
+    diffs: list[DecisionDiff] = []
+
+    for result in whatif.results:
+        label = _label_of(whatif, result)
+        if label is not None:
+            labelled += 1
+
+        candidate = next((rs for rs in result.rule_scores if rs.rule_id == rule_id),
+                         None)
+        if candidate is None:
+            # The rule does not apply to this subject at all. Recorded by its
+            # absence from the counts rather than as a zero.
+            continue
+
+        _accumulate_conditions(per_condition, candidate, label)
+
+        outcome = result.outcome
+        fired = bool(candidate.evaluation.fired) and candidate.evaluation.satisfied
+        authorised = rule_id in outcome.authorised_rules
+        counts["fire"] += int(fired)
+        counts["authorise"] += int(authorised)
+        counts["carry"] += int(outcome.action_source_rule == rule_id)
+        counts["alert"] += int(bool(outcome.authorised_rules))
+
+        if authorised:
+            flagged += 1
+            if label is not None:
+                flagged_labelled += 1
+                flagged_on_fraud += int(label == "fraud")
+
+        score = result.pool.subject_score
+        if score > 0:
+            scored.append(score)
+        bands[result.band] = bands.get(result.band, 0) + 1
+
+        if authorised and len(chosen) < examples:
+            chosen.append((result, label, ranked_signals(result)))
+
+        diff = _diff(whatif, result)
+        if diff is not None:
+            diffs.append(diff)
+
+    ordered = sorted(scored)
+    evaluated = len(whatif.results)
+
+    return RuleSimulation(
+        rule_id=rule_id, rule_name=draft.name, mode=whatif.mode,
+        status=draft.status, action=draft.action,
+        review_threshold=draft.review_threshold,
+        prevent_threshold=draft.prevent_threshold,
+        population=SampledPopulation(
+            subject_type=whatif.subject_type, lane=whatif.lane,
+            as_of=whatif.as_of,
+            subjects_available=whatif.subjects_available,
+            subjects_evaluated=evaluated,
+            sample_cap=whatif.sample_cap,
+            truncated=evaluated < whatif.subjects_available,
+            basis=SAMPLING_BASIS,
+        ),
+        would_fire=counts["fire"], would_authorise=counts["authorise"],
+        would_carry_action=counts["carry"], would_alert=counts["alert"],
+        distribution=ScoreDistribution(
+            scored=len(ordered), bands=bands,
+            min_score=ordered[0] if ordered else None,
+            median_score=ordered[len(ordered) // 2] if ordered else None,
+            max_score=ordered[-1] if ordered else None,
+        ),
+        ground_truth=GroundTruth(
+            labelled=labelled, flagged=flagged,
+            flagged_labelled=flagged_labelled,
+            flagged_on_fraud=flagged_on_fraud,
+            precision_pct=_pct(flagged_on_fraud, flagged_labelled),
+        ),
+        conditions=[_condition_summary(v) for v in per_condition.values()],
+        examples=[
+            WorkedExample(
+                subject_id=r.request.subject.id, occurred_at=r.request.occurred_at,
+                score=r.pool.subject_score, band=r.band,
+                action=r.outcome.action,
+                action_source_rule=r.outcome.action_source_rule,
+                would_alert=bool(r.outcome.authorised_rules), label=label,
+                signals=[
+                    Signal(
+                        rank=s.rank, feature_key=s.feature_key,
+                        contribution=s.contribution, direction=s.direction,
+                        human_text=s.human_text, reason_code=s.reason_code,
+                        source_rule_id=s.source_rule_id,
+                        asserted_by_rules=list(s.asserted_by_rules),
+                        feature_value=jsonable(s.feature_value),
+                        value_as_of=s.value_as_of,
+                        value_computed_at=s.value_computed_at,
+                    )
+                    for s in signals
+                ],
+            )
+            for r, label, signals in chosen
+        ],
+        diff_total=len(diffs),
+        diff_new=sum(1 for d in diffs if d.change == "new"),
+        diff_score_changed=sum(1 for d in diffs if "score" in d.change),
+        diff_action_changed=sum(1 for d in diffs if "action" in d.change),
+        diff=diffs[:diff_limit],
+    )
+
+
+def _label_of(whatif, result) -> str | None:
+    trigger = result.request.trigger
+    return whatif.labels.get(trigger.id) if trigger else None
+
+
+def _pct(numerator: int, denominator: int) -> Decimal | None:
+    if not denominator:
+        return None
+    return (Decimal(numerator) * 100 / Decimal(denominator)).quantize(Decimal("0.01"))
+
+
+def _accumulate_conditions(acc: dict, candidate, label: str | None) -> None:
+    for visited in candidate.evaluation.evaluated:
+        cond = visited.condition
+        key = (cond.condition_group, cond.feature_key, cond.operator,
+               str(cond.threshold_num), str(cond.threshold_text))
+        row = acc.setdefault(key, {
+            "condition": cond, "evaluated": 0, "fired": 0, "degraded": 0,
+            "fired_labelled": 0, "fired_on_fraud": 0})
+        row["evaluated"] += 1
+        row["degraded"] += int(visited.read.is_degraded)
+        if visited.fired:
+            row["fired"] += 1
+            if label is not None:
+                row["fired_labelled"] += 1
+                row["fired_on_fraud"] += int(label == "fraud")
+
+
+def _condition_summary(row: dict) -> ConditionOutcomeSummary:
+    cond = row["condition"]
+    aggravating = cond.contribution_points >= 0
+    on_fraud, labelled = row["fired_on_fraud"], row["fired_labelled"]
+    # Direction-aware, exactly as v_condition_performance measures it: an
+    # aggravator is right when it fires on fraud, a mitigator when it fires on
+    # legitimate traffic. Scoring a deduction as though it were an accusation is
+    # the inversion §5 objects to, and it ranks the best condition in the catalog
+    # as the worst.
+    hits = on_fraud if aggravating else (labelled - on_fraud)
+    return ConditionOutcomeSummary(
+        condition_group=cond.condition_group, feature_key=cond.feature_key,
+        operator=cond.operator,
+        threshold=(str(cond.threshold_num) if cond.threshold_num is not None
+                   else cond.threshold_text),
+        contribution_points=cond.contribution_points,
+        direction="aggravating" if aggravating else "mitigating",
+        is_required=cond.is_required,
+        evaluated=row["evaluated"], fired=row["fired"], degraded=row["degraded"],
+        fire_rate_pct=_pct(row["fired"], row["evaluated"]),
+        fired_labelled=labelled, fired_on_fraud=on_fraud,
+        precision_pct=_pct(hits, labelled),
+    )
+
+
+def _diff(whatif, result) -> DecisionDiff | None:
+    """Only subjects whose decision would MOVE. A diff listing everything that
+    stayed the same is a diff nobody reads."""
+    subject_id = result.request.subject.id
+    stored = whatif.stored.get(subject_id)
+    score = result.pool.subject_score
+    action = result.outcome.action
+
+    if stored is None:
+        if score == 0 and action == "allow":
+            return None            # nothing before, nothing now
+        return DecisionDiff(
+            subject_id=subject_id, change="new", simulated_score=score,
+            simulated_action=action,
+            simulated_source_rule=result.outcome.action_source_rule)
+
+    stored_score = Decimal(str(stored["score"]))
+    moved = []
+    if stored_score != score:
+        moved.append("score")
+    if stored["action_taken"] != action:
+        moved.append("action")
+    if not moved:
+        return None
+    return DecisionDiff(
+        subject_id=subject_id, change="+".join(moved),
+        stored_score=stored_score, simulated_score=score,
+        stored_action=stored["action_taken"], simulated_action=action,
+        stored_source_rule=stored["action_source_rule"],
+        simulated_source_rule=result.outcome.action_source_rule)
+
+
 class SimulationRequest(BaseModel):
     """What a caller sends to /simulate/subject. Not part of the published read
     shape — an input model — but kept here so the pair is read together."""
@@ -197,3 +571,23 @@ class SimulationRequest(BaseModel):
     # The `computed_at` ceiling. Set it to a stored decision's `decided_at` to
     # ask what that decision saw, rather than re-scoring with today's values.
     replay_as_of: datetime | None = None
+
+
+class RuleSimulationRequest(BaseModel):
+    """What an admin sends to /simulate/rule.
+
+    `rule` is a `RuleDraft` — the SAME body `POST /rules` will accept in session
+    3, validated by the same `rules/validate.py`. That is decision 6: the test
+    path and the write path share a validator so the tested thing and the written
+    thing cannot diverge, and they stay separate endpoints so the test path can
+    never accidentally become the write path.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    rule: RuleDraft
+    as_of: datetime | None = None
+    # O1, answered: default 2,000, overridable, and published as the denominator.
+    sample_cap: int = Field(default=DEFAULT_SAMPLE_CAP, ge=1, le=50_000)
+    subject_ids: list[str] | None = None
+    examples: int = Field(default=5, ge=0, le=50)
+    diff_limit: int = Field(default=25, ge=0, le=500)

@@ -17,6 +17,17 @@ from .types import FeatureSpec, Rule, RuleCondition
 
 _UNSET = object()
 
+# The rule lifecycle, in one place. `inactive` is how a rule is deleted
+# (WEEK5-PLAN decision 7): decisions.action_source_rule, decisions.vetoed_by and
+# alert_signals.source_rule_id all reference rule_definitions with no ON DELETE,
+# so Postgres already refuses to remove a rule that ever acted.
+RULE_STATUSES: tuple[str, ...] = ("active", "shadow", "inactive")
+
+# The statuses that reach the engine at all. `shadow` is loaded and — until
+# session 3 builds the gate — acts exactly like `active` (D2); it is loaded here
+# so that gate has something to gate.
+EVALUATED_RULE_STATUSES: tuple[str, ...] = ("active", "shadow")
+
 
 def _json_default(raw: Any) -> tuple[Any, bool]:
     """Split default_when_absent into (value, has_default).
@@ -82,9 +93,9 @@ def load_rules(conn: psycopg.Connection, lane: str | None = None) -> list[Rule]:
                prevent_threshold, evaluation_lag,
                recommended_action_text, clear_text
           FROM rule_definitions
-         WHERE status IN ('active','shadow')
+         WHERE status = ANY(%s)
     """
-    params: list[Any] = []
+    params: list[Any] = [list(EVALUATED_RULE_STATUSES)]
     if lane is not None:
         sql += " AND execution_mode = %s"
         params.append(lane)

@@ -49,7 +49,7 @@ python scripts/kpi_report.py                # the nine tiles
 python scripts/case_report.py --alert 5 --citations   # a filing draft, sourced
 
 psql "$GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   # 87 / 68 / 64 / 58 / 0
-pytest                                                    # 262 tests
+pytest                                                    # 334 tests
 python -m glassbox serve                                  # read API on :8000
 ```
 
@@ -148,6 +148,7 @@ src/glassbox/
   explain/    evidence.py   the six relations, and the Quoter every number passes
               copilot.py    three chips, templated
               case_report.py the filing draft, which says it is one
+  rules/      validate.py   what an authored rule must fail against
   contract/   models.py     alert.v1 — frozen, digest-pinned
               queue.py      queue.v1 — priority, with its factors published
               executions.py executions.v1 — what was done, and its synthetic flag
@@ -156,7 +157,9 @@ src/glassbox/
                             explain a score without its mitigators
               dispositions.py dispositions.v1 — the analyst's verdict, appended
               simulation.py simulation.v1 — what the engine would say, unstored
-  api/        ten read endpoints, one write, one simulation
+              catalog.py    catalog.v1 — the control plane, and what each
+                            condition has actually earned
+  api/        fourteen read endpoints, one write, two simulations
               auth.py       two demo users; reads open, writes not
 ```
 
@@ -286,6 +289,32 @@ question it actually means — *has a person worked this?* A case closed by
 `resolve_actions.py` has not been, which is why `case_outcomes.source` exists and
 why a synthetic pass does not empty the queue.
 
+**An authored rule has to fail loudly or not at all.** Every way of getting a
+rule wrong used to produce a rule that did *nothing*: `conditions.fires()`
+returns False for an operator it does not recognise, and for a numeric operator
+with no threshold, so a typo yielded a rule that never fired, never errored, and
+appeared in the ledger as a condition that simply never matched.
+`rules/validate.py` turns twenty-two of those into rejections an author can read —
+including the two §5 and §7.3 care about most: a mitigator on a feature carrying
+a default (it can never be observed *absent*, so it can never strip preventive
+authority) and a `prevent_threshold` below its `review_threshold`. The operator
+list it checks against is the same tuple the interpreter dispatches on, and the
+action, subject-type and reason-code vocabularies are the same `ref_*` rows the
+foreign keys enforce and `GET /reference` serves — so the console's dropdowns
+cannot offer something the validator will refuse. Every rule this repo ships is
+asserted to validate clean, reconstructed from its stored rows rather than
+written out in the test.
+
+**A rule can be tested against history before it exists.** `POST /simulate/rule`
+applies a candidate to the control plane inside the same rolled-back scope
+`/simulate/subject` uses, loads the engine context *after* the draft is applied,
+and runs the ordinary pipeline — there is no "simulation mode" in the evaluator,
+because a second evaluation path would be a second answer. It takes an edit as
+well as a new rule, which is what makes its diff worth reading: repricing
+`session_geo_jump_km` from 18 to 5 reports `TXN-48291` moving 87 → 74 and
+`challenge` → `alert` *before* the seed is written. Week 4's `0026` moved a
+signed-off score and the blast radius had to be worked out afterwards.
+
 **Dispositions are append-only and the latest one wins.** A correction is a
 second row; the first judgement stays in the record. `v_kpi_cases` publishes the
 latest as the verdict and still measures the triage clock to the *first* one,
@@ -346,7 +375,7 @@ and it is worth saying so out loud.
 ## Tests
 
 ```bash
-pytest                       # 262 tests, ~95s including a full rebuild
+pytest                       # 334 tests, ~125s including a full rebuild
 pytest tests/test_degraded.py -v
 ```
 
@@ -381,6 +410,9 @@ a test that mutates rules or catalog rows cannot leak.
 | `test_dispositions.py` | Week 5 — append-only verdicts, latest wins, the clock stays on the first, the caveat that derives itself |
 | `test_simulation.py` | Week 5 — the five fixtures re-derived, the bar that matches the stored bar, and the row counts that must not move |
 | `test_api_auth.py` | Week 5 — reads open, writes authenticated, the actor that cannot be smuggled in a body |
+| `test_catalog_api.py` | Week 5 — the control plane read, the measurement beside the price, and the condition that admits it has never been evaluated |
+| `test_rule_validation.py` | Week 5 — the ways to author a rule that does nothing, each a 422; and every shipped rule still validating clean |
+| `test_simulate_rule.py` | Week 5 — a candidate rule over history, the reprice diff, and the two control-plane tables that must not move |
 
 ---
 
@@ -455,11 +487,19 @@ Port 55432 rather than 5432 so a locally-installed PostgreSQL does not collide.
 - **Further defects are recorded in [WEEK5-PLAN.md](WEEK5-PLAN.md)**, none of
   them owned by this list. Still open: **no version counter is ever bumped**, so
   a stored `rule_version_set` cannot distinguish a rule from the same rule
-  repriced; **shadow mode is inert**, so a rule authored `status='shadow'` acts
-  exactly like a live one; and **admin-authored rules have no validation to fail
-  against** — `conditions.fires()` returns False for an unrecognised operator, so
-  a typo yields a rule that never fires and never errors. Closed in session 1:
-  dispositions now carry provenance. That file is the plan for the rest.
+  repriced; and **shadow mode is inert**, so a rule authored `status='shadow'`
+  scores, alerts and issues preventive actions exactly like a live one —
+  `GET /rules` publishes `takes_action: true` for such a rule rather than
+  implying a guarantee that is not there. Closed in session 1: dispositions carry
+  provenance. Closed in session 2: an authored rule now has something to fail
+  against. That file is the plan for the rest.
+- **A rule what-if is bounded and says so.** `POST /simulate/rule` evaluates the
+  most recent 2,000 subjects of the rule's own subject type by default, and
+  publishes `subjects_available`, `subjects_evaluated`, `sample_cap` and
+  `truncated` so every rate under it carries the denominator it was computed
+  over. `would_alert` counts evaluations that *would* raise a case, not cases:
+  §9's folding, restatement and suppression all happen at persist time and
+  nothing is persisted, so it is an upper bound and the payload names it as one.
 - `week1-data-model.md` is **superseded by the seed files** where the two
   disagree — catalog size, three `entity_type` values, and the price of
   `country_is_new_for_customer`. It is kept as a Week-1 artifact rather than

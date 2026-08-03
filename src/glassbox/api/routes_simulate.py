@@ -17,10 +17,18 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..config import reference_now
 from ..contract.models import is_contract_violation
-from ..contract.simulation import SimulatedDecision, SimulationRequest, to_simulation
+from ..contract.simulation import (
+    RuleSimulation,
+    RuleSimulationRequest,
+    SimulatedDecision,
+    SimulationRequest,
+    to_rule_simulation,
+    to_simulation,
+)
 from ..db import connect
 from ..engine.evaluation import EngineContext
-from ..engine.simulate import SubjectNotEvaluable, simulate_subject
+from ..engine.simulate import SubjectNotEvaluable, simulate_rule, simulate_subject
+from ..rules.validate import RuleInvalid, ensure_valid, normalised
 from .auth import Principal, require_role
 
 router = APIRouter()
@@ -57,3 +65,36 @@ def simulate(body: SimulationRequest,
             raise
         # No commit. The connection closes without one, and simulation_scope has
         # already rolled back — two independent reasons nothing survives.
+
+
+@router.post("/simulate/rule", response_model=RuleSimulation)
+def simulate_candidate_rule(body: RuleSimulationRequest,
+                            who: Principal = Depends(require_role("admin"))):
+    """Test a candidate rule against history before anything is written.
+
+    **Admin only.** It is a read of the population by way of the control plane,
+    and the control plane is the admin's surface; session 3's `POST /rules` takes
+    the identical body and the identical validator, so an analyst who could run
+    this could author against the write endpoint's exact contract without being
+    allowed to use it.
+
+    Validation happens here and again at publish, from one function
+    (`rules/validate.py`) — that is the point of decision 6. A rejection is a 422
+    carrying EVERY problem, not the first one, because an author fixing errors one
+    round trip at a time is an author who stops using the validator.
+    """
+    draft = normalised(body.rule)
+    with connect() as conn:
+        try:
+            ensure_valid(conn, draft)
+        except RuleInvalid as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=[r.as_dict() for r in exc.rejections]) from exc
+
+        whatif = simulate_rule(conn, draft, as_of=body.as_of,
+                               sample_cap=body.sample_cap,
+                               subject_ids=body.subject_ids)
+        return to_rule_simulation(whatif, examples=body.examples,
+                                  diff_limit=body.diff_limit)
+        # No commit, and simulation_scope has already rolled the draft back.

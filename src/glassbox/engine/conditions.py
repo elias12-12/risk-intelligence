@@ -37,6 +37,20 @@ from ..types import (
 )
 
 
+# The operators this module IMPLEMENTS, grouped by what they need to be given.
+# Exported because `rules/validate.py` rejects an operator this file cannot
+# interpret, and a second list of "the operators we support" is exactly the
+# defect it exists to close: `fires()` returns False for anything unrecognised,
+# so a typo'd operator produces a rule that never fires and never errors. One
+# tuple, read by the interpreter and by the validator.
+NUMERIC_OPERATORS: tuple[str, ...] = (">", ">=", "<", "<=")
+EQUALITY_OPERATORS: tuple[str, ...] = ("=", "!=", "<>")
+MEMBERSHIP_OPERATORS: tuple[str, ...] = ("in",)
+SUPPORTED_OPERATORS: tuple[str, ...] = (
+    NUMERIC_OPERATORS + EQUALITY_OPERATORS + MEMBERSHIP_OPERATORS
+)
+
+
 def _as_decimal(value: Any) -> Decimal | None:
     if value is None or isinstance(value, bool):
         return None
@@ -51,14 +65,14 @@ def _as_decimal(value: Any) -> Decimal | None:
 def fires(cond: RuleCondition, value: Any) -> bool:
     """Apply one stored operator to one read value."""
     op = cond.operator
-    if op in (">", ">=", "<", "<="):
+    if op in NUMERIC_OPERATORS:
         num = _as_decimal(value)
         if num is None or cond.threshold_num is None:
             return False
         thr = Decimal(cond.threshold_num)
         return {">": num > thr, ">=": num >= thr, "<": num < thr, "<=": num <= thr}[op]
 
-    if op in ("=", "!=", "<>"):
+    if op in EQUALITY_OPERATORS:
         negate = op != "="
         if cond.threshold_text in ("true", "false"):
             hit = bool(value) is (cond.threshold_text == "true") and value is not None
@@ -69,7 +83,7 @@ def fires(cond: RuleCondition, value: Any) -> bool:
             hit = value is not None and str(value) == str(cond.threshold_text)
         return (not hit) if negate else hit
 
-    if op == "in":
+    if op in MEMBERSHIP_OPERATORS:
         options = [s.strip() for s in (cond.threshold_text or "").split(",") if s.strip()]
         return value is not None and str(value) in options
 

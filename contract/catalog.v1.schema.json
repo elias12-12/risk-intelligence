@@ -1,0 +1,1120 @@
+{
+  "$defs": {
+    "FeatureView": {
+      "additionalProperties": false,
+      "description": "One catalog row, spec and all.\n\n`default_when_absent` is published as-is, including the difference between\nSQL NULL and JSON `null`: `has_default` is the field that carries it, because\n§5's whole distinction is between \"no default, let absence stay observable\"\nand \"0 is the real answer\" and JSON cannot express that difference alone.",
+      "properties": {
+        "aggregation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Aggregation"
+        },
+        "baseline_spec": {
+          "default": null,
+          "title": "Baseline Spec"
+        },
+        "default_reason_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default Reason Code"
+        },
+        "default_when_absent": {
+          "default": null,
+          "title": "Default When Absent"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "entity_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entity Type"
+        },
+        "fanout_policy": {
+          "default": "error",
+          "title": "Fanout Policy",
+          "type": "string"
+        },
+        "feature_key": {
+          "title": "Feature Key",
+          "type": "string"
+        },
+        "filter_predicate": {
+          "default": null,
+          "title": "Filter Predicate"
+        },
+        "has_default": {
+          "default": false,
+          "title": "Has Default",
+          "type": "boolean"
+        },
+        "inline_capable": {
+          "title": "Inline Capable",
+          "type": "boolean"
+        },
+        "is_graph": {
+          "default": false,
+          "title": "Is Graph",
+          "type": "boolean"
+        },
+        "max_staleness_seconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Staleness Seconds"
+        },
+        "refresh": {
+          "default": "incremental",
+          "title": "Refresh",
+          "type": "string"
+        },
+        "resolution_path": {
+          "default": "auto",
+          "title": "Resolution Path",
+          "type": "string"
+        },
+        "scope_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope Key"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "source_kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Kind"
+        },
+        "source_relation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Relation"
+        },
+        "spec_version": {
+          "default": 1,
+          "title": "Spec Version",
+          "type": "integer"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "subject_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject Key"
+        },
+        "value_expr": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Expr"
+        },
+        "value_type": {
+          "title": "Value Type",
+          "type": "string"
+        },
+        "window_spec": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window Spec"
+        }
+      },
+      "required": [
+        "feature_key",
+        "display_name",
+        "value_type",
+        "inline_capable"
+      ],
+      "title": "FeatureView",
+      "type": "object"
+    },
+    "ReferenceVocabulary": {
+      "$defs": {
+        "ActionValue": {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "title": "Action",
+              "type": "string"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Description"
+            },
+            "is_preventive": {
+              "title": "Is Preventive",
+              "type": "boolean"
+            },
+            "severity": {
+              "title": "Severity",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "action",
+            "severity",
+            "is_preventive"
+          ],
+          "title": "ActionValue",
+          "type": "object"
+        },
+        "NamedValue": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Description"
+            },
+            "value": {
+              "title": "Value",
+              "type": "string"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "NamedValue",
+          "type": "object"
+        },
+        "OperatorValue": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "title": "Description",
+              "type": "string"
+            },
+            "operator": {
+              "title": "Operator",
+              "type": "string"
+            },
+            "takes": {
+              "title": "Takes",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operator",
+            "takes",
+            "description"
+          ],
+          "title": "OperatorValue",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Every vocabulary an authoring UI needs, from the rows that enforce it.\n\nThe point of serving this rather than hardcoding it in the console: these are\nthe same values `rules/validate.py` rejects against, and the same rows the\nforeign keys enforce. A dropdown built from anything else is a dropdown that\ncan offer an option the validator refuses.",
+      "properties": {
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/ActionValue"
+          },
+          "title": "Actions",
+          "type": "array"
+        },
+        "aggregations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aggregations",
+          "type": "array"
+        },
+        "combine_values": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Combine Values",
+          "type": "array"
+        },
+        "execution_modes": {
+          "items": {
+            "$ref": "#/$defs/NamedValue"
+          },
+          "title": "Execution Modes",
+          "type": "array"
+        },
+        "operators": {
+          "items": {
+            "$ref": "#/$defs/OperatorValue"
+          },
+          "title": "Operators",
+          "type": "array"
+        },
+        "reason_codes": {
+          "items": {
+            "$ref": "#/$defs/NamedValue"
+          },
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "rule_statuses": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Rule Statuses",
+          "type": "array"
+        },
+        "source_relations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Relations",
+          "type": "array"
+        },
+        "subject_types": {
+          "items": {
+            "$ref": "#/$defs/NamedValue"
+          },
+          "title": "Subject Types",
+          "type": "array"
+        }
+      },
+      "title": "ReferenceVocabulary",
+      "type": "object"
+    },
+    "RuleDetail": {
+      "$defs": {
+        "ConditionPerformance": {
+          "additionalProperties": false,
+          "description": "What a condition actually did, as opposed to what it was priced at.",
+          "properties": {
+            "alert_precision_pct": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Alert Precision Pct"
+            },
+            "basis": {
+              "default": "v_condition_performance over decision_conditions: every condition of every applicable rule, fired or not. precision_pct is direction-aware — the fraud rate for an aggravator, the legitimate rate for a mitigator — measured against transactions.synthetic_label, which is exact on this dataset and meaningless outside it. points_per_precision_point is what the catalog charges per unit of measured precision, and HIGH IS BAD.",
+              "title": "Basis",
+              "type": "string"
+            },
+            "degraded": {
+              "title": "Degraded",
+              "type": "integer"
+            },
+            "evaluated": {
+              "title": "Evaluated",
+              "type": "integer"
+            },
+            "fire_rate_pct": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Fire Rate Pct"
+            },
+            "fired": {
+              "title": "Fired",
+              "type": "integer"
+            },
+            "fired_labelled": {
+              "default": 0,
+              "title": "Fired Labelled",
+              "type": "integer"
+            },
+            "fired_on_cases": {
+              "default": 0,
+              "title": "Fired On Cases",
+              "type": "integer"
+            },
+            "fired_on_fraud": {
+              "default": 0,
+              "title": "Fired On Fraud",
+              "type": "integer"
+            },
+            "mean_contribution": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Mean Contribution"
+            },
+            "points_per_precision_point": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Points Per Precision Point"
+            },
+            "precision_pct": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Precision Pct"
+            }
+          },
+          "required": [
+            "evaluated",
+            "fired",
+            "degraded"
+          ],
+          "title": "ConditionPerformance",
+          "type": "object"
+        },
+        "ConditionView": {
+          "additionalProperties": false,
+          "properties": {
+            "condition_group": {
+              "title": "Condition Group",
+              "type": "integer"
+            },
+            "condition_id": {
+              "title": "Condition Id",
+              "type": "integer"
+            },
+            "contribution_points": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Contribution Points"
+            },
+            "direction": {
+              "title": "Direction",
+              "type": "string"
+            },
+            "feature_key": {
+              "title": "Feature Key",
+              "type": "string"
+            },
+            "is_required": {
+              "default": true,
+              "title": "Is Required",
+              "type": "boolean"
+            },
+            "operator": {
+              "title": "Operator",
+              "type": "string"
+            },
+            "performance": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConditionPerformance"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "performance_absent_because": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Performance Absent Because"
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reason Code"
+            },
+            "rule_id": {
+              "title": "Rule Id",
+              "type": "string"
+            },
+            "signal_template": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Signal Template"
+            },
+            "threshold_num": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Threshold Num"
+            },
+            "threshold_text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Threshold Text"
+            }
+          },
+          "required": [
+            "condition_id",
+            "rule_id",
+            "condition_group",
+            "feature_key",
+            "operator",
+            "contribution_points",
+            "direction"
+          ],
+          "title": "ConditionView",
+          "type": "object"
+        },
+        "RuleVersionView": {
+          "additionalProperties": false,
+          "description": "One published snapshot of a rule.\n\n`rule_versions` is empty for every rule shipped so far — nothing has ever\npublished — so a stored `rule_version_set` names a version with no definition\nbehind it. Session 3 closes that. Until it does, `GET /rules/{id}` returns an\nempty list here and `versions_resolve: false` rather than implying history.",
+          "properties": {
+            "published_at": {
+              "format": "date-time",
+              "title": "Published At",
+              "type": "string"
+            },
+            "published_by": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Published By"
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Status"
+            },
+            "version": {
+              "title": "Version",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "version",
+            "published_at"
+          ],
+          "title": "RuleVersionView",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action"
+        },
+        "clear_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clear Text"
+        },
+        "combine": {
+          "default": "AND",
+          "title": "Combine",
+          "type": "string"
+        },
+        "condition_set": {
+          "items": {
+            "$ref": "#/$defs/ConditionView"
+          },
+          "title": "Condition Set",
+          "type": "array"
+        },
+        "conditions": {
+          "default": 0,
+          "title": "Conditions",
+          "type": "integer"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "created_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created By"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "evaluated": {
+          "default": true,
+          "title": "Evaluated",
+          "type": "boolean"
+        },
+        "evaluation_lag_seconds": {
+          "default": 0.0,
+          "title": "Evaluation Lag Seconds",
+          "type": "number"
+        },
+        "execution_mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Execution Mode"
+        },
+        "is_veto": {
+          "default": false,
+          "title": "Is Veto",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "prevent_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prevent Threshold"
+        },
+        "recommended_action_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recommended Action Text"
+        },
+        "review_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Threshold"
+        },
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "shadow_since": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shadow Since"
+        },
+        "status": {
+          "default": "active",
+          "title": "Status",
+          "type": "string"
+        },
+        "status_caveat": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status Caveat"
+        },
+        "subject_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject Type"
+        },
+        "takes_action": {
+          "default": true,
+          "title": "Takes Action",
+          "type": "boolean"
+        },
+        "version": {
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "versions": {
+          "items": {
+            "$ref": "#/$defs/RuleVersionView"
+          },
+          "title": "Versions",
+          "type": "array"
+        },
+        "versions_resolve": {
+          "default": false,
+          "title": "Versions Resolve",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "rule_id",
+        "name"
+      ],
+      "title": "RuleDetail",
+      "type": "object"
+    },
+    "RuleSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action"
+        },
+        "combine": {
+          "default": "AND",
+          "title": "Combine",
+          "type": "string"
+        },
+        "conditions": {
+          "default": 0,
+          "title": "Conditions",
+          "type": "integer"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "created_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created By"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "evaluated": {
+          "default": true,
+          "title": "Evaluated",
+          "type": "boolean"
+        },
+        "evaluation_lag_seconds": {
+          "default": 0.0,
+          "title": "Evaluation Lag Seconds",
+          "type": "number"
+        },
+        "execution_mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Execution Mode"
+        },
+        "is_veto": {
+          "default": false,
+          "title": "Is Veto",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "prevent_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prevent Threshold"
+        },
+        "review_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Threshold"
+        },
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "shadow_since": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shadow Since"
+        },
+        "status": {
+          "default": "active",
+          "title": "Status",
+          "type": "string"
+        },
+        "status_caveat": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status Caveat"
+        },
+        "subject_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject Type"
+        },
+        "takes_action": {
+          "default": true,
+          "title": "Takes Action",
+          "type": "boolean"
+        },
+        "version": {
+          "default": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rule_id",
+        "name"
+      ],
+      "title": "RuleSummary",
+      "type": "object"
+    }
+  },
+  "$id": "https://glassbox.local/contract/catalog.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Frozen. Generated by scripts/export_contract_schema.py from src/glassbox/contract/models.py. Do not edit by hand; a breaking change becomes catalog.v2.schema.json and v1 keeps being served.",
+  "title": "GlassBox control-plane contract, version 1"
+}

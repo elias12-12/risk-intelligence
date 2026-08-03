@@ -1,5 +1,737 @@
 {
   "$defs": {
+    "RuleSimulation": {
+      "$defs": {
+        "ConditionOutcomeSummary": {
+          "additionalProperties": false,
+          "description": "One condition of the candidate, measured over the sample.\n\nThe stored `condition_id` is deliberately absent: a draft's conditions are\ninserted inside the rolled-back scope, so their ids are real for the length\nof one transaction and mean nothing afterwards. Publishing one would be\npublishing a key that resolves to a different row, or to none.",
+          "properties": {
+            "condition_group": {
+              "title": "Condition Group",
+              "type": "integer"
+            },
+            "contribution_points": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Contribution Points"
+            },
+            "degraded": {
+              "default": 0,
+              "title": "Degraded",
+              "type": "integer"
+            },
+            "direction": {
+              "title": "Direction",
+              "type": "string"
+            },
+            "evaluated": {
+              "default": 0,
+              "title": "Evaluated",
+              "type": "integer"
+            },
+            "feature_key": {
+              "title": "Feature Key",
+              "type": "string"
+            },
+            "fire_rate_pct": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Fire Rate Pct"
+            },
+            "fired": {
+              "default": 0,
+              "title": "Fired",
+              "type": "integer"
+            },
+            "fired_labelled": {
+              "default": 0,
+              "title": "Fired Labelled",
+              "type": "integer"
+            },
+            "fired_on_fraud": {
+              "default": 0,
+              "title": "Fired On Fraud",
+              "type": "integer"
+            },
+            "is_required": {
+              "default": true,
+              "title": "Is Required",
+              "type": "boolean"
+            },
+            "operator": {
+              "title": "Operator",
+              "type": "string"
+            },
+            "precision_pct": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Precision Pct"
+            },
+            "threshold": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Threshold"
+            }
+          },
+          "required": [
+            "condition_group",
+            "feature_key",
+            "operator",
+            "contribution_points",
+            "direction"
+          ],
+          "title": "ConditionOutcomeSummary",
+          "type": "object"
+        },
+        "DecisionDiff": {
+          "additionalProperties": false,
+          "description": "A subject whose stored decision and simulated decision disagree.\n\n`stored_*` is null where the subject has no stored decision for this lane —\nwhich is not a change of mind, it is the rule reaching something nothing\nreached before, and `change` says which of the two it is.",
+          "properties": {
+            "change": {
+              "title": "Change",
+              "type": "string"
+            },
+            "simulated_action": {
+              "title": "Simulated Action",
+              "type": "string"
+            },
+            "simulated_score": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Simulated Score"
+            },
+            "simulated_source_rule": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Simulated Source Rule"
+            },
+            "stored_action": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Stored Action"
+            },
+            "stored_score": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Stored Score"
+            },
+            "stored_source_rule": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Stored Source Rule"
+            },
+            "subject_id": {
+              "title": "Subject Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "subject_id",
+            "change",
+            "simulated_score",
+            "simulated_action"
+          ],
+          "title": "DecisionDiff",
+          "type": "object"
+        },
+        "GroundTruth": {
+          "additionalProperties": false,
+          "description": "Both numbers, never just the rate.",
+          "properties": {
+            "caveat": {
+              "default": "Measured against transactions.synthetic_label on the row that triggered each evaluation. Planted ground truth: exact on this dataset and meaningless outside it.",
+              "title": "Caveat",
+              "type": "string"
+            },
+            "flagged": {
+              "default": 0,
+              "title": "Flagged",
+              "type": "integer"
+            },
+            "flagged_labelled": {
+              "default": 0,
+              "title": "Flagged Labelled",
+              "type": "integer"
+            },
+            "flagged_on_fraud": {
+              "default": 0,
+              "title": "Flagged On Fraud",
+              "type": "integer"
+            },
+            "labelled": {
+              "default": 0,
+              "title": "Labelled",
+              "type": "integer"
+            },
+            "precision_pct": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Precision Pct"
+            }
+          },
+          "title": "GroundTruth",
+          "type": "object"
+        },
+        "SampledPopulation": {
+          "additionalProperties": false,
+          "description": "What was actually evaluated, and what it was drawn from.\n\nThe cap is published as the denominator rather than applied silently,\nbecause a rate whose denominator is a sample and does not say so is the same\nunearned claim §11 refuses on a KPI tile.",
+          "properties": {
+            "as_of": {
+              "format": "date-time",
+              "title": "As Of",
+              "type": "string"
+            },
+            "basis": {
+              "title": "Basis",
+              "type": "string"
+            },
+            "lane": {
+              "title": "Lane",
+              "type": "string"
+            },
+            "sample_cap": {
+              "title": "Sample Cap",
+              "type": "integer"
+            },
+            "subject_type": {
+              "title": "Subject Type",
+              "type": "string"
+            },
+            "subjects_available": {
+              "title": "Subjects Available",
+              "type": "integer"
+            },
+            "subjects_evaluated": {
+              "title": "Subjects Evaluated",
+              "type": "integer"
+            },
+            "truncated": {
+              "title": "Truncated",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "subject_type",
+            "lane",
+            "as_of",
+            "subjects_available",
+            "subjects_evaluated",
+            "sample_cap",
+            "truncated",
+            "basis"
+          ],
+          "title": "SampledPopulation",
+          "type": "object"
+        },
+        "ScoreDistribution": {
+          "additionalProperties": false,
+          "properties": {
+            "bands": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "title": "Bands",
+              "type": "object"
+            },
+            "max_score": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Max Score"
+            },
+            "median_score": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Median Score"
+            },
+            "min_score": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Min Score"
+            },
+            "scored": {
+              "title": "Scored",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "scored"
+          ],
+          "title": "ScoreDistribution",
+          "type": "object"
+        },
+        "Signal": {
+          "additionalProperties": false,
+          "properties": {
+            "asserted_by_rules": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Asserted By Rules",
+              "type": "array"
+            },
+            "contribution": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Contribution"
+            },
+            "direction": {
+              "enum": [
+                "aggravating",
+                "mitigating",
+                "veto"
+              ],
+              "title": "Direction",
+              "type": "string"
+            },
+            "feature_key": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Feature Key"
+            },
+            "feature_value": {
+              "default": null,
+              "title": "Feature Value"
+            },
+            "human_text": {
+              "title": "Human Text",
+              "type": "string"
+            },
+            "rank": {
+              "title": "Rank",
+              "type": "integer"
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reason Code"
+            },
+            "source_rule_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Source Rule Id"
+            },
+            "value_as_of": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Value As Of"
+            },
+            "value_computed_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Value Computed At"
+            }
+          },
+          "required": [
+            "rank",
+            "feature_key",
+            "contribution",
+            "direction",
+            "human_text"
+          ],
+          "title": "Signal",
+          "type": "object"
+        },
+        "WorkedExample": {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "title": "Action",
+              "type": "string"
+            },
+            "action_source_rule": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Action Source Rule"
+            },
+            "band": {
+              "title": "Band",
+              "type": "string"
+            },
+            "label": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Label"
+            },
+            "occurred_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Occurred At"
+            },
+            "score": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Score"
+            },
+            "signals": {
+              "items": {
+                "$ref": "#/$defs/Signal"
+              },
+              "title": "Signals",
+              "type": "array"
+            },
+            "subject_id": {
+              "title": "Subject Id",
+              "type": "string"
+            },
+            "would_alert": {
+              "title": "Would Alert",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "subject_id",
+            "score",
+            "band",
+            "action",
+            "would_alert"
+          ],
+          "title": "WorkedExample",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "What a candidate rule WOULD do, with nothing written down.\n\nPublished as part of simulation.v1 rather than catalog.v1 because it is a\nsimulation: the guarantee it carries is `persisted: false`, and that\nguarantee is what this contract is for.",
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "basis": {
+          "default": "A candidate rule applied to the control plane inside a transaction that is rolled back, then the engine's own pipeline over stored rows. No rule, condition, decision, alert, signal or execution was written. Every count below is over subjects_evaluated, which is not the population — see population.basis.",
+          "title": "Basis",
+          "type": "string"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/ConditionOutcomeSummary"
+          },
+          "title": "Conditions",
+          "type": "array"
+        },
+        "diff": {
+          "items": {
+            "$ref": "#/$defs/DecisionDiff"
+          },
+          "title": "Diff",
+          "type": "array"
+        },
+        "diff_action_changed": {
+          "default": 0,
+          "title": "Diff Action Changed",
+          "type": "integer"
+        },
+        "diff_new": {
+          "default": 0,
+          "title": "Diff New",
+          "type": "integer"
+        },
+        "diff_score_changed": {
+          "default": 0,
+          "title": "Diff Score Changed",
+          "type": "integer"
+        },
+        "diff_total": {
+          "default": 0,
+          "title": "Diff Total",
+          "type": "integer"
+        },
+        "distribution": {
+          "$ref": "#/$defs/ScoreDistribution"
+        },
+        "examples": {
+          "items": {
+            "$ref": "#/$defs/WorkedExample"
+          },
+          "title": "Examples",
+          "type": "array"
+        },
+        "ground_truth": {
+          "$ref": "#/$defs/GroundTruth"
+        },
+        "hygiene_caveat": {
+          "default": "would_alert counts EVALUATIONS that would raise a case, not cases. §9's hygiene — folding a repeat onto an open case, restating it, suppressing under an investigation — happens at persist time, and nothing is persisted here. On a subject that already has an open case the real cycle would fold rather than raise, so this is an upper bound on new cases.",
+          "title": "Hygiene Caveat",
+          "type": "string"
+        },
+        "mode": {
+          "title": "Mode",
+          "type": "string"
+        },
+        "persisted": {
+          "const": false,
+          "default": false,
+          "title": "Persisted",
+          "type": "boolean"
+        },
+        "population": {
+          "$ref": "#/$defs/SampledPopulation"
+        },
+        "prevent_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prevent Threshold"
+        },
+        "review_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Review Threshold"
+        },
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "rule_name": {
+          "title": "Rule Name",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "would_alert": {
+          "default": 0,
+          "title": "Would Alert",
+          "type": "integer"
+        },
+        "would_authorise": {
+          "default": 0,
+          "title": "Would Authorise",
+          "type": "integer"
+        },
+        "would_carry_action": {
+          "default": 0,
+          "title": "Would Carry Action",
+          "type": "integer"
+        },
+        "would_fire": {
+          "default": 0,
+          "title": "Would Fire",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "rule_id",
+        "rule_name",
+        "mode",
+        "status",
+        "action",
+        "review_threshold",
+        "population",
+        "distribution",
+        "ground_truth"
+      ],
+      "title": "RuleSimulation",
+      "type": "object"
+    },
     "SimulatedDecision": {
       "$defs": {
         "Action": {

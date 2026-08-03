@@ -181,6 +181,13 @@ _SUBJECT_SQL: dict[str, str] = {
 }
 
 
+# The subject types the planner can actually reach. A rule on a subject type in
+# ref_subject_type but NOT here would be loaded by the engine, never planned, and
+# never evaluated — so `rules/validate.py` rejects one rather than letting it be
+# published as a rule that silently does nothing.
+PLANNABLE_SUBJECT_TYPES: frozenset[str] = frozenset(_SUBJECT_SQL)
+
+
 def _subjects(conn, subject_type: str, as_of: datetime,
               ids: Sequence[str] | None) -> list[dict]:
     sql = _SUBJECT_SQL.get(subject_type)
@@ -273,6 +280,26 @@ def _dedup_pairs(pairs):
 
 
 # ---------------------------------------------------------------- 9. run
+def evaluate_population(conn: psycopg.Connection, ctx: EngineContext,
+                        requests: Sequence[EvaluationRequest]
+                        ) -> Iterable[list[EvaluationResult]]:
+    """Evaluate many requests, in batches, and HAND THE RESULTS BACK.
+
+    `run_lane(persist=False)` counted evaluations and dropped everything it
+    computed on the floor, which made it useless to the one caller that wants
+    the results and not the rows: the rule what-if, which evaluates a population
+    against a candidate rule inside a transaction that is rolled back.
+
+    A generator rather than a list, because the transaction lane is ~9,800
+    subjects and a caller that only needs aggregates should not have to hold
+    every pool in memory to get them. `run_lane` consumes it too — one chunking
+    loop, so the persisting path and the collecting path cannot batch
+    differently.
+    """
+    for start in range(0, len(requests), BATCH):
+        yield evaluate_batch(conn, ctx, requests[start:start + BATCH])
+
+
 def run_lane(conn: psycopg.Connection, lane: str, as_of: datetime,
              run_id: str | None = None, subject_ids: Sequence[str] | None = None,
              ctx: EngineContext | None = None, persist: bool = True) -> dict:
@@ -281,9 +308,7 @@ def run_lane(conn: psycopg.Connection, lane: str, as_of: datetime,
     requests = plan_evaluations(conn, ctx, lane, as_of, run_id, subject_ids)
 
     totals = {"evaluations": 0, "decisions": 0, "alerts": 0, "signals": 0}
-    for start in range(0, len(requests), BATCH):
-        chunk = requests[start:start + BATCH]
-        results = evaluate_batch(conn, ctx, chunk)
+    for results in evaluate_population(conn, ctx, requests):
         totals["evaluations"] += len(results)
         if persist:
             written = persist_mod.write_batch(conn, results)
