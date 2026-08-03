@@ -33,8 +33,22 @@ def discover(include_seeds: bool = True) -> list[Path]:
     # Migrations and seeds interleave by number on purpose: 0009's seed must
     # land after 0008's DDL and before 0011 alters the table it populates.
     ordered = sorted(files, key=lambda p: p.name)
-    # Views are CREATE OR REPLACE and read the finished schema, so they go last.
+    # Views read the finished schema, so they go last.
     return ordered + sorted(config.VIEWS_DIR.glob("*.sql"))
+
+
+def is_view(path: Path) -> bool:
+    """Views are DEFINITIONS, not migrations, and are re-applied every run.
+
+    Each view file opens with DROP VIEW IF EXISTS and is idempotent by
+    construction, so replaying it costs nothing. Honouring the ledger for them
+    was a latent defect rather than a policy: a view is edited in place — there
+    is no v_kpi_cases_2.sql — so the ledger entry from its first run meant that
+    every later edit applied to a fresh database and silently did not apply to an
+    existing one. That went unnoticed while no view had ever been changed. Week 5
+    changed `v_kpi_cases` (0029's disposition_source), which is what surfaced it.
+    """
+    return path.parent == config.VIEWS_DIR
 
 
 def applied_versions(conn: psycopg.Connection) -> set[str]:
@@ -61,7 +75,7 @@ def migrate(dsn: str, include_seeds: bool = True, verbose: bool = True) -> list[
             cur.execute(LEDGER_DDL)
         done = applied_versions(conn)
         for path in discover(include_seeds):
-            if path.name in done:
+            if path.name in done and not is_view(path):
                 if verbose:
                     print(f"  skip  {path.name}")
                 continue
@@ -90,7 +104,9 @@ def main() -> int:
                 cur.execute(LEDGER_DDL)
             done = applied_versions(conn)
         for path in discover(not args.no_seeds):
-            print(f"  {'applied' if path.name in done else 'PENDING'}  {path.name}")
+            state = ("always " if is_view(path)
+                     else "applied" if path.name in done else "PENDING")
+            print(f"  {state}  {path.name}")
         return 0
 
     print(f"migrating {target.rsplit('@', 1)[-1]}")

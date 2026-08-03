@@ -1,10 +1,13 @@
 """Settling issued actions, and dispositioning the cases they opened (§8).
 
 Nothing external answers a step-up here, so outcomes are SYNTHESISED — and every
-row this module writes is stamped `synthetic = TRUE` and every rate computed from
-them is published with that flag, because a synthetic challenge pass rate
-presented as a measured one would be exactly the kind of claim this system exists
-not to make.
+row this module writes says so: `action_executions.synthetic = TRUE`, and since
+0029, `case_outcomes.source = 'synthetic'`. Every rate computed from them is
+published with that flag, because a synthetic challenge pass rate presented as a
+measured one would be exactly the kind of claim this system exists not to make.
+The dispositions needed the column once a human could write to the same table:
+until Week 5 the settler identified itself only by writing the literal
+`analyst_id = 'synthetic-analyst'`, which nothing could JOIN against.
 
 The draw is deterministic — blake2b over (execution_id, subject) rather than
 random.seed — so two runs settle identically, a test can assert that, and nothing
@@ -211,7 +214,7 @@ def _disposition(conn: psycopg.Connection) -> int:
     with conn.cursor() as cur:
         cur.executemany(
             "INSERT INTO case_outcomes (alert_id, disposition, analyst_id, "
-            "decided_at, notes) VALUES (%s, %s, %s, %s, %s)",
+            "decided_at, notes, source) VALUES (%s, %s, %s, %s, %s, 'synthetic')",
             payload,
         )
     return len(payload)

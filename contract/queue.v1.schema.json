@@ -152,6 +152,11 @@
           "default": 0,
           "title": "Unresolved Executions",
           "type": "integer"
+        },
+        "worked_by_analyst": {
+          "default": false,
+          "title": "Worked By Analyst",
+          "type": "boolean"
         }
       },
       "required": [

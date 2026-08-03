@@ -1,0 +1,535 @@
+{
+  "$defs": {
+    "SimulatedDecision": {
+      "$defs": {
+        "Action": {
+          "additionalProperties": false,
+          "properties": {
+            "clear_text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Clear Text"
+            },
+            "prevent_threshold_met": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Prevent Threshold Met"
+            },
+            "recommended_text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Recommended Text"
+            },
+            "source_rule": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Source Rule"
+            },
+            "taken": {
+              "title": "Taken",
+              "type": "string"
+            },
+            "vetoed_by": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Vetoed By"
+            }
+          },
+          "required": [
+            "taken"
+          ],
+          "title": "Action",
+          "type": "object"
+        },
+        "Evidence": {
+          "additionalProperties": false,
+          "description": "What the decision could see, and what it could not.",
+          "properties": {
+            "degraded_features": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Degraded Features",
+              "type": "array"
+            },
+            "evaluation_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Evaluation Id"
+            },
+            "evaluation_trigger": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Evaluation Trigger"
+            },
+            "feature_version_set": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "title": "Feature Version Set",
+              "type": "object"
+            },
+            "pit_bound_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Pit Bound At"
+            },
+            "replay_as_of": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Replay As Of"
+            },
+            "rule_version_set": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "title": "Rule Version Set",
+              "type": "object"
+            },
+            "trigger_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Trigger Id"
+            },
+            "trigger_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Trigger Type"
+            }
+          },
+          "title": "Evidence",
+          "type": "object"
+        },
+        "RuleTrace": {
+          "additionalProperties": false,
+          "description": "One rule's own verdict, before consolidation and before precedence.\n\nPublished because a simulation is something a person runs to understand WHY,\nand the two questions an alert cannot answer are \"which rules looked at this\nand declined to fire\" and \"which fired but had no authority\". The stored\nequivalent is `decision_conditions`, which exists for the population and is\nfar too coarse to read one subject out of.",
+          "properties": {
+            "action": {
+              "title": "Action",
+              "type": "string"
+            },
+            "authorised": {
+              "title": "Authorised",
+              "type": "boolean"
+            },
+            "degraded_features": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Degraded Features",
+              "type": "array"
+            },
+            "is_veto": {
+              "default": false,
+              "title": "Is Veto",
+              "type": "boolean"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "prevent_threshold": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Prevent Threshold"
+            },
+            "preventive_authority": {
+              "default": true,
+              "title": "Preventive Authority",
+              "type": "boolean"
+            },
+            "review_threshold": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Review Threshold"
+            },
+            "rule_id": {
+              "title": "Rule Id",
+              "type": "string"
+            },
+            "satisfied": {
+              "title": "Satisfied",
+              "type": "boolean"
+            },
+            "score": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Score"
+            },
+            "veto_established": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Veto Established"
+            }
+          },
+          "required": [
+            "rule_id",
+            "name",
+            "action",
+            "score",
+            "satisfied",
+            "authorised"
+          ],
+          "title": "RuleTrace",
+          "type": "object"
+        },
+        "Signal": {
+          "additionalProperties": false,
+          "properties": {
+            "asserted_by_rules": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Asserted By Rules",
+              "type": "array"
+            },
+            "contribution": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ],
+              "title": "Contribution"
+            },
+            "direction": {
+              "enum": [
+                "aggravating",
+                "mitigating",
+                "veto"
+              ],
+              "title": "Direction",
+              "type": "string"
+            },
+            "feature_key": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Feature Key"
+            },
+            "feature_value": {
+              "default": null,
+              "title": "Feature Value"
+            },
+            "human_text": {
+              "title": "Human Text",
+              "type": "string"
+            },
+            "rank": {
+              "title": "Rank",
+              "type": "integer"
+            },
+            "reason_code": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reason Code"
+            },
+            "source_rule_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Source Rule Id"
+            },
+            "value_as_of": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Value As Of"
+            },
+            "value_computed_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Value Computed At"
+            }
+          },
+          "required": [
+            "rank",
+            "feature_key",
+            "contribution",
+            "direction",
+            "human_text"
+          ],
+          "title": "Signal",
+          "type": "object"
+        },
+        "Subject": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "role": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Role"
+            },
+            "type": {
+              "title": "Type",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "title": "Subject",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/Action"
+        },
+        "as_of": {
+          "format": "date-time",
+          "title": "As Of",
+          "type": "string"
+        },
+        "band": {
+          "title": "Band",
+          "type": "string"
+        },
+        "basis": {
+          "default": "Simulated evaluation: the engine's own pipeline (resolve, point-in-time read, conditions, per-rule score, consolidate, band, precedence) over stored rows, inside a transaction that is rolled back. No decision, alert, signal, execution or feature value was written. Nothing here was acted on.",
+          "title": "Basis",
+          "type": "string"
+        },
+        "evidence": {
+          "$ref": "#/$defs/Evidence"
+        },
+        "lane": {
+          "title": "Lane",
+          "type": "string"
+        },
+        "occurred_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Occurred At"
+        },
+        "persisted": {
+          "const": false,
+          "default": false,
+          "title": "Persisted",
+          "type": "boolean"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/RuleTrace"
+          },
+          "title": "Rules",
+          "type": "array"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Score"
+        },
+        "signals": {
+          "items": {
+            "$ref": "#/$defs/Signal"
+          },
+          "title": "Signals",
+          "type": "array"
+        },
+        "subject": {
+          "$ref": "#/$defs/Subject"
+        },
+        "would_alert": {
+          "default": false,
+          "title": "Would Alert",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "subject",
+        "lane",
+        "as_of",
+        "score",
+        "band",
+        "action",
+        "evidence"
+      ],
+      "title": "SimulatedDecision",
+      "type": "object"
+    }
+  },
+  "$id": "https://glassbox.local/contract/simulation.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Frozen. Generated by scripts/export_contract_schema.py from src/glassbox/contract/models.py. Do not edit by hand; a breaking change becomes simulation.v2.schema.json and v1 keeps being served.",
+  "title": "GlassBox simulation contract, version 1"
+}

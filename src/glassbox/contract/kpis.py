@@ -70,6 +70,48 @@ FAIL_MODE_IS_POLICY = (
     "is not a measured resilience number."
 )
 
+_PROVENANCE_SQL = """
+SELECT count(*) FILTER (WHERE disposition_source = 'synthetic') AS synthetic,
+       count(*) FILTER (WHERE disposition_source = 'analyst')   AS analyst
+  FROM v_kpi_cases
+ WHERE event_at > %(start)s AND event_at <= %(end)s
+   AND disposition IS NOT NULL
+"""
+
+
+def _provenance(conn, p) -> tuple[int, int]:
+    """(synthetic, analyst) — whose judgement the disposition tiles rest on.
+
+    One row per case, from v_kpi_cases, so this counts CASES and not raw
+    `case_outcomes` rows: a case an analyst corrected twice is one verdict, and
+    the source is the source of the verdict that won.
+    """
+    row = fetch_one(conn, _PROVENANCE_SQL,
+                    {"start": p["w_start"], "end": p["w_end"]})
+    return int(row["synthetic"] or 0), int(row["analyst"] or 0)
+
+
+def _provenance_note(synthetic: int, analyst: int) -> str | None:
+    """One sentence about whose judgement a number rests on, or None when every
+    verdict in the window came from a person.
+
+    DERIVED, not asserted. Until Week 5 two tiles carried a hardcoded sentence
+    saying every disposition here was written by a script — true when it was
+    written, and false from the first human disposition onward. A caveat that
+    cannot stop being true is not a caveat; it is a claim the payload makes about
+    itself and never rechecks, which is the thing `kpis.py`'s own rule 4 exists
+    to forbid. 0029's `case_outcomes.source` is what makes it checkable.
+    """
+    if not synthetic:
+        return None
+    if not analyst:
+        return ("Every dispositioned case in this window carries a verdict "
+                "written by scripts/resolve_actions.py against the synthetic "
+                "label, not by an analyst (case_outcomes.source = 'synthetic').")
+    return (f"{synthetic} of {synthetic + analyst} dispositioned cases in this "
+            f"window carry a verdict written by scripts/resolve_actions.py "
+            f"rather than by an analyst; {analyst} carry a person's.")
+
 
 class KpiPart(BaseModel):
     """One component of a tile, with its own denominator.
@@ -286,6 +328,7 @@ def _false_positive_rate(conn, p, tile) -> KpiTile:
               if p["b_start"] else None)
     value = _rate(now["false_positives"], now["dispositioned"])
     baseline = _rate(before["false_positives"], before["dispositioned"]) if before else None
+    synthetic, analyst = _provenance(conn, p)
     return tile(
         key="false_positive_rate", label="False-positive rate", unit="percent",
         value=value, numerator=now["false_positives"],
@@ -296,8 +339,13 @@ def _false_positive_rate(conn, p, tile) -> KpiTile:
               "from both sides rather than folded into one.",
         requires="§8 — for preventive actions this also needs execution outcomes, "
                  "which is the prevention_false_positive part of `action_rates`",
-        caveat=None if now["dispositioned"] else
-        "no case in this window has been dispositioned, so there is no rate",
+        # A rate computed over verdicts a script wrote is a synthetic rate, and
+        # said nothing about it before Week 5. The empty-denominator case still
+        # wins the caveat slot: "there is no rate" outranks "whose rate".
+        synthetic=bool(synthetic),
+        caveat=("no case in this window has been dispositioned, so there is no rate"
+                if not now["dispositioned"]
+                else _provenance_note(synthetic, analyst)),
     )
 
 
@@ -342,6 +390,7 @@ def _validation_outcomes(conn, p, tile) -> KpiTile:
     rows = fetch_all(conn, _OUTCOMES_SQL, {"start": p["w_start"], "end": p["w_end"]})
     total = sum(r["n"] for r in rows)
     settled = sum(r["n"] for r in rows if r["disposition"] != "undispositioned")
+    synthetic, analyst = _provenance(conn, p)
     return tile(
         key="validation_outcomes", label="Validation outcomes", unit="count",
         value=Decimal(settled), numerator=settled, denominator=total,
@@ -351,8 +400,8 @@ def _validation_outcomes(conn, p, tile) -> KpiTile:
         requires="§8 case_outcomes — BUILT since Week 1",
         parts=[KpiPart(label=r["disposition"], value=Decimal(r["n"]),
                        numerator=r["n"], denominator=total) for r in rows],
-        caveat="On this dataset every disposition was written by "
-               "scripts/resolve_actions.py, not by an analyst.",
+        synthetic=bool(synthetic),
+        caveat=_provenance_note(synthetic, analyst),
     )
 
 
@@ -372,6 +421,8 @@ def _median_triage_time(conn, p, tile) -> KpiTile:
               if p["b_start"] else None)
     value = _q(now["median"])
     baseline = _q(before["median"]) if before else None
+    synthetic, analyst = _provenance(conn, p)
+    note = _provenance_note(synthetic, analyst)
     return tile(
         key="median_triage_time", label="Median triage time", unit="seconds",
         value=value, numerator=now["settled"], denominator=now["cases"],
@@ -383,9 +434,15 @@ def _median_triage_time(conn, p, tile) -> KpiTile:
                  "than defaulted, which is what makes this computable",
         parts=[KpiPart(label="p90", value=_q(now["p90"]), unit="seconds",
                        numerator=now["settled"], denominator=now["cases"])],
-        caveat="Every case here was settled in one synthetic pass, so these "
-               "durations are a property of the generator's clock and describe "
-               "no analyst's working day.",
+        synthetic=bool(synthetic),
+        # The clock clause is appended rather than folded into the note, because
+        # it is true of this tile only: v_kpi_cases measures to the FIRST
+        # disposition, so a case a script closed keeps the generator's duration
+        # even after a person revisits it.
+        caveat=None if note is None else (
+            note + " These durations run to the first disposition, so a case "
+            "settled by the script keeps the generator's clock even if an "
+            "analyst has since revisited it."),
     )
 
 

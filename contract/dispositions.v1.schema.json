@@ -1,0 +1,237 @@
+{
+  "$defs": {
+    "CaseVerdict": {
+      "$defs": {
+        "Disposition": {
+          "additionalProperties": false,
+          "properties": {
+            "alert_id": {
+              "title": "Alert Id",
+              "type": "integer"
+            },
+            "analyst_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Analyst Id"
+            },
+            "decided_at": {
+              "format": "date-time",
+              "title": "Decided At",
+              "type": "string"
+            },
+            "disposition": {
+              "enum": [
+                "confirmed_fraud",
+                "false_positive",
+                "confirmed_legit",
+                "inconclusive"
+              ],
+              "title": "Disposition",
+              "type": "string"
+            },
+            "feeds_retrain": {
+              "default": true,
+              "title": "Feeds Retrain",
+              "type": "boolean"
+            },
+            "notes": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Notes"
+            },
+            "outcome_id": {
+              "title": "Outcome Id",
+              "type": "integer"
+            },
+            "source": {
+              "enum": [
+                "analyst",
+                "synthetic"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          "required": [
+            "outcome_id",
+            "alert_id",
+            "disposition",
+            "source",
+            "decided_at"
+          ],
+          "title": "Disposition",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "The state of one case's disposition, and every row behind it.\n\n`verdict` is what the KPI views count; `history` is why it says that. A\nsurface that showed only the verdict would hide a correction, which is the\none thing an append-only table exists to preserve.",
+      "properties": {
+        "alert_id": {
+          "title": "Alert Id",
+          "type": "integer"
+        },
+        "decided_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decided At"
+        },
+        "dispositions": {
+          "default": 0,
+          "title": "Dispositions",
+          "type": "integer"
+        },
+        "history": {
+          "items": {
+            "$ref": "#/$defs/Disposition"
+          },
+          "title": "History",
+          "type": "array"
+        },
+        "verdict": {
+          "anyOf": [
+            {
+              "enum": [
+                "confirmed_fraud",
+                "false_positive",
+                "confirmed_legit",
+                "inconclusive"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Verdict"
+        },
+        "verdict_source": {
+          "anyOf": [
+            {
+              "enum": [
+                "analyst",
+                "synthetic"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Verdict Source"
+        },
+        "worked_by_analyst": {
+          "default": false,
+          "title": "Worked By Analyst",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "alert_id"
+      ],
+      "title": "CaseVerdict",
+      "type": "object"
+    },
+    "Disposition": {
+      "additionalProperties": false,
+      "properties": {
+        "alert_id": {
+          "title": "Alert Id",
+          "type": "integer"
+        },
+        "analyst_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analyst Id"
+        },
+        "decided_at": {
+          "format": "date-time",
+          "title": "Decided At",
+          "type": "string"
+        },
+        "disposition": {
+          "enum": [
+            "confirmed_fraud",
+            "false_positive",
+            "confirmed_legit",
+            "inconclusive"
+          ],
+          "title": "Disposition",
+          "type": "string"
+        },
+        "feeds_retrain": {
+          "default": true,
+          "title": "Feeds Retrain",
+          "type": "boolean"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "outcome_id": {
+          "title": "Outcome Id",
+          "type": "integer"
+        },
+        "source": {
+          "enum": [
+            "analyst",
+            "synthetic"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "outcome_id",
+        "alert_id",
+        "disposition",
+        "source",
+        "decided_at"
+      ],
+      "title": "Disposition",
+      "type": "object"
+    }
+  },
+  "$id": "https://glassbox.local/contract/dispositions.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Frozen. Generated by scripts/export_contract_schema.py from src/glassbox/contract/models.py. Do not edit by hand; a breaking change becomes dispositions.v2.schema.json and v1 keeps being served.",
+  "title": "GlassBox case disposition contract, version 1"
+}

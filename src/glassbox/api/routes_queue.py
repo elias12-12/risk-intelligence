@@ -21,18 +21,23 @@ router = APIRouter()
 
 @router.get("/queue", response_model=list[QueueEntry])
 def get_queue(status: str | None = "open", subject_type: str | None = None,
-              as_of: datetime | None = None,
+              as_of: datetime | None = None, include_worked: bool = False,
               limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0)):
     """Priority-ordered, not score-ordered (§9).
 
     `as_of` is exposed rather than hidden: recency decay makes the order a
     function of an instant, and a caller that cannot name the instant cannot
     reproduce the order it was shown.
+
+    `include_worked` brings back cases a PERSON has dispositioned — a
+    recently-closed view, not the working queue. A case closed only by the
+    synthetic settler was never worked and never left (contract/queue.py).
     """
     with connect() as conn:
         try:
             return read_queue(conn, status=status, subject_type=subject_type,
-                              as_of=as_of, limit=limit, offset=offset)
+                              as_of=as_of, limit=limit, offset=offset,
+                              include_worked=include_worked)
         except (ValidationError, Exception) as exc:  # noqa: BLE001
             if is_contract_violation(exc):
                 raise HTTPException(status_code=500, detail=str(exc)) from exc

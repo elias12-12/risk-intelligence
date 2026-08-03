@@ -26,11 +26,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from glassbox import config                       # noqa: E402
+from glassbox.contract.dispositions import CaseVerdict, Disposition  # noqa: E402
 from glassbox.contract.executions import ExecutionRecord  # noqa: E402
 from glassbox.contract.explanation import CaseReport, CopilotResponse  # noqa: E402
 from glassbox.contract.kpis import KpiSet, KpiTile  # noqa: E402
 from glassbox.contract.models import AlertDetail, AlertSummary  # noqa: E402
 from glassbox.contract.queue import QueueEntry    # noqa: E402
+from glassbox.contract.simulation import SimulatedDecision  # noqa: E402
 
 # name -> (title, models). Order is irrelevant: the document is dumped with
 # sort_keys=True, which is also why appending anything to alert.v1's $defs would
@@ -46,6 +48,10 @@ CONTRACTS: dict[str, tuple[str, tuple[type, ...]]] = {
                 (KpiSet, KpiTile)),
     "explanation.v1": ("GlassBox explanation contract, version 1",
                        (CopilotResponse, CaseReport)),
+    "dispositions.v1": ("GlassBox case disposition contract, version 1",
+                        (CaseVerdict, Disposition)),
+    "simulation.v1": ("GlassBox simulation contract, version 1",
+                      (SimulatedDecision,)),
 }
 
 

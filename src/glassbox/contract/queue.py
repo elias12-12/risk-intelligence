@@ -31,6 +31,20 @@ Age is measured from `last_event_at` — EVENT time, not `created_at`, which is
 wall clock and would make a historical replay rank everything as brand new. And
 `as_of` is a parameter rather than now() so the ordering is reproducible, which is
 what lets a test assert it at all.
+
+**WEEK 5: what a queue is a queue OF.** It used to filter `alerts.status =
+'open'`, and nothing ever moves an alert off `open` — the engine raises, folds,
+restates and suppresses, and no writer anywhere sets a terminal status. Now that
+an analyst can disposition a case, `alerts.status` stays engine-owned by decision
+and the queue asks the question it actually means: *has a person worked this?*
+
+The filter is `source = 'analyst'`, not "has any disposition", and the
+distinction is load-bearing on this dataset. `scripts/resolve_actions.py`
+dispositions every open case in one synthetic pass, so a queue keyed on "any
+disposition" would be EMPTY after a normal bootstrap — the demo would show an
+empty queue and the analyst would have nothing to work. A fixture script closing
+a case is not an analyst having worked it, and 0029's provenance column is what
+lets the queue tell the difference.
 """
 from __future__ import annotations
 
@@ -85,6 +99,10 @@ class QueueEntry(BaseModel):
     unresolved_executions: int = 0
     synthetic_outcomes: bool = False
 
+    # Week 5: has a PERSON dispositioned this case. False for a case closed only
+    # by the synthetic settler, which is why such a case is still in the queue.
+    worked_by_analyst: bool = False
+
 
 _QUEUE_SQL = """
 SELECT a.alert_id, a.subject_type, a.subject_id, a.title, a.score, a.band,
@@ -100,7 +118,10 @@ SELECT a.alert_id, a.subject_type, a.subject_id, a.title, a.score, a.band,
                 / 3600.0, 0)             AS age_hours,
        COALESCE(x.n, 0)                  AS executions,
        COALESCE(x.unresolved, 0)         AS unresolved_executions,
-       COALESCE(x.synthetic, FALSE)      AS synthetic_outcomes
+       COALESCE(x.synthetic, FALSE)      AS synthetic_outcomes,
+       EXISTS (SELECT 1 FROM case_outcomes co
+                WHERE co.alert_id = a.alert_id
+                  AND co.source = 'analyst') AS worked_by_analyst
   FROM alerts a
   JOIN decisions d ON d.decision_id = a.decision_id
   LEFT JOIN alert_policy p ON p.subject_type = a.subject_type
@@ -115,15 +136,23 @@ SELECT a.alert_id, a.subject_type, a.subject_id, a.title, a.score, a.band,
   ) x ON x.alert_id = a.alert_id
  WHERE (%(status)s::text IS NULL OR a.status = %(status)s)
    AND (%(subject_type)s::text IS NULL OR a.subject_type = %(subject_type)s)
+   AND (%(include_worked)s::boolean
+        OR NOT EXISTS (SELECT 1 FROM case_outcomes co
+                        WHERE co.alert_id = a.alert_id
+                          AND co.source = 'analyst'))
 """
 
 
 def read_queue(conn: psycopg.Connection, status: str | None = "open",
                subject_type: str | None = None, as_of: datetime | None = None,
-               limit: int = 50, offset: int = 0) -> list[QueueEntry]:
+               limit: int = 50, offset: int = 0,
+               include_worked: bool = False) -> list[QueueEntry]:
+    """`include_worked` brings back cases a person has already dispositioned —
+    for a "recently closed" view, not for the working queue."""
     as_of = as_of or reference_now()
     rows = fetch_all(conn, _QUEUE_SQL, {
-        "as_of": as_of, "status": status, "subject_type": subject_type})
+        "as_of": as_of, "status": status, "subject_type": subject_type,
+        "include_worked": include_worked})
 
     entries = [_entry(r) for r in rows]
     # Sorted in Python, not SQL, because the formula is published here and
@@ -169,4 +198,5 @@ def _entry(row: dict) -> QueueEntry:
         executions=row["executions"],
         unresolved_executions=row["unresolved_executions"],
         synthetic_outcomes=bool(row["synthetic_outcomes"]),
+        worked_by_analyst=bool(row["worked_by_analyst"]),
     )

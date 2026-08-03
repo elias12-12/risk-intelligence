@@ -6,6 +6,11 @@ rows, §13's explanation surfaces built deterministically, §14's second pattern
 tested. What remains is listed in §W4.6 and none of it is a Part I item.
 **Verified against:** PostgreSQL 16 (docker-compose), 215 tests green.
 
+**Next:** [`WEEK5-PLAN.md`](WEEK5-PLAN.md) — roles, dispositions, the three
+simulation endpoints, admin rule authoring with a real publish step, and the
+React console. Five sessions, and it is a living document: sessions update it as
+they go, and it folds into this file as §W5 when Week 5 completes.
+
 Newest week first. Each week's account is left as it was written; where a later
 week moved something, the later account says so rather than editing the earlier
 one.

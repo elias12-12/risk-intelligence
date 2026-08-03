@@ -112,10 +112,26 @@ def test_every_file_is_applied_exactly_once(conn):
     assert on_disk == applied, f"unapplied: {sorted(on_disk - applied)}"
 
 
-def test_migrations_are_idempotent_by_ledger(built_database):
-    """A second run applies nothing. The ledger, not the SQL, is what makes
-    re-running safe — none of the Week-1 files are individually idempotent."""
-    assert migrate_mod.migrate(built_database, verbose=False) == []
+def test_migrations_are_idempotent_by_ledger_and_views_are_not(built_database):
+    """A second run re-applies the VIEWS and nothing else.
+
+    The ledger, not the SQL, is what makes re-running a migration safe — none of
+    the Week-1 files are individually idempotent, and applying `0003` twice would
+    fail on the first CREATE TABLE.
+
+    Views are the deliberate exception (Week 5, D5). A view is a DEFINITION
+    edited in place — there is no `v_kpi_cases_2.sql` — so honouring the ledger
+    for them meant an edit applied to a fresh database and silently skipped an
+    existing one. That went unnoticed until 0029 changed the first view anyone
+    had ever changed. Each opens with DROP VIEW IF EXISTS, so replaying costs
+    nothing.
+    """
+    applied = migrate_mod.migrate(built_database, verbose=False)
+    assert applied, "views must re-apply, or a view edit reaches no live database"
+    assert all(name.startswith("v_") for name in applied), (
+        f"a migration or seed re-applied on a second run: "
+        f"{[n for n in applied if not n.startswith('v_')]}")
+    assert set(applied) == {p.name for p in config.VIEWS_DIR.glob("*.sql")}
 
 
 def test_decisions_uniqueness_is_enforced(conn):

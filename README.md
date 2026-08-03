@@ -49,7 +49,7 @@ python scripts/kpi_report.py                # the nine tiles
 python scripts/case_report.py --alert 5 --citations   # a filing draft, sourced
 
 psql "$GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   # 87 / 68 / 64 / 58 / 0
-pytest                                                    # 215 tests
+pytest                                                    # 262 tests
 python -m glassbox serve                                  # read API on :8000
 ```
 
@@ -154,7 +154,10 @@ src/glassbox/
               kpis.py       kpis.v1 — nine tiles, and the only place a window is defined
               explanation.py explanation.v1 — and the validator that refuses to
                             explain a score without its mitigators
-  api/        seven read endpoints
+              dispositions.py dispositions.v1 — the analyst's verdict, appended
+              simulation.py simulation.v1 — what the engine would say, unstored
+  api/        ten read endpoints, one write, one simulation
+              auth.py       two demo users; reads open, writes not
 ```
 
 The pipeline order, in one line each:
@@ -273,6 +276,35 @@ without them. No language model is involved in any field of any payload, which i
 a design choice rather than a limitation — the explanation surface of a glass-box
 system should not itself be a black box.
 
+**Reads are open; the two surfaces that leave a mark are not.** An analyst marks
+a case through `POST /alerts/{id}/outcome`, authenticated by a bearer token that
+resolves to one of two demo users (`src/glassbox/api/auth.py` — a static map, not
+authentication, and it says so). The actor comes from the principal and never
+from the body. `alerts.status` stays engine-owned: the engine raises, folds,
+restates and suppresses, the analyst owns the verdict, and the queue asks the
+question it actually means — *has a person worked this?* A case closed by
+`resolve_actions.py` has not been, which is why `case_outcomes.source` exists and
+why a synthetic pass does not empty the queue.
+
+**Dispositions are append-only and the latest one wins.** A correction is a
+second row; the first judgement stays in the record. `v_kpi_cases` publishes the
+latest as the verdict and still measures the triage clock to the *first* one,
+because a correction hours later does not mean triage took hours longer. Every
+tile derived from a disposition now reads that provenance instead of asserting
+it: the two tiles that used to carry a hardcoded "every disposition here was
+written by a script" say how many were, and say nothing at all once none are.
+
+**A simulation is the same engine with nothing written down.**
+`POST /simulate/subject` re-derives a subject's decision — same planner, same
+point-in-time read, same precedence — inside a scope that rolls back, and
+publishes `persisted: false` on the wire rather than leaving a caller to infer it
+from the URL. The bar comes from `engine.persist.ranked_signals`, the one
+function that also writes a stored alert's signals, so a simulated bar and the
+alert it predicts cannot disagree. With `replay_as_of` set to a stored decision's
+`decided_at` it answers *"what did that decision see?"* rather than *"what would
+we say today?"*, which is the audit question the bitemporal feature store exists
+to make answerable.
+
 ---
 
 ## Extending it: what costs rows, and what costs code
@@ -314,7 +346,7 @@ and it is worth saying so out loud.
 ## Tests
 
 ```bash
-pytest                       # 215 tests, ~90s including a full rebuild
+pytest                       # 262 tests, ~95s including a full rebuild
 pytest tests/test_degraded.py -v
 ```
 
@@ -345,7 +377,10 @@ a test that mutates rules or catalog rows cannot leak.
 | `test_feature_runner.py` | §3.1 — every value the deleted generator code derived |
 | `test_extension_cardtesting.py` | §14 — INSERT-only extension on a merchant, DDL hook |
 | `test_extension_refundabuse.py` | §14 — the second pattern, on a customer, AND across groups |
-| `test_migrations.py` | the five-column key, no UPSERTs, ledger idempotence |
+| `test_migrations.py` | the five-column key, no UPSERTs, ledger idempotence — and that views are the exception |
+| `test_dispositions.py` | Week 5 — append-only verdicts, latest wins, the clock stays on the first, the caveat that derives itself |
+| `test_simulation.py` | Week 5 — the five fixtures re-derived, the bar that matches the stored bar, and the row counts that must not move |
+| `test_api_auth.py` | Week 5 — reads open, writes authenticated, the actor that cannot be smuggled in a body |
 
 ---
 
@@ -417,6 +452,14 @@ Port 55432 rather than 5432 so a locally-installed PostgreSQL does not collide.
   topology says "one service, one database, a scheduler" and `run_cycle.py` is
   still run by hand, so §18's decision 6 (the async cycle period) stays open.
   Admin write endpoints go with the console, which is out of scope.
+- **Further defects are recorded in [WEEK5-PLAN.md](WEEK5-PLAN.md)**, none of
+  them owned by this list. Still open: **no version counter is ever bumped**, so
+  a stored `rule_version_set` cannot distinguish a rule from the same rule
+  repriced; **shadow mode is inert**, so a rule authored `status='shadow'` acts
+  exactly like a live one; and **admin-authored rules have no validation to fail
+  against** — `conditions.fires()` returns False for an unrecognised operator, so
+  a typo yields a rule that never fires and never errors. Closed in session 1:
+  dispositions now carry provenance. That file is the plan for the rest.
 - `week1-data-model.md` is **superseded by the seed files** where the two
   disagree — catalog size, three `entity_type` values, and the price of
   `country_is_new_for_customer`. It is kept as a Week-1 artifact rather than

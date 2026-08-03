@@ -405,7 +405,7 @@ def _write_signals(cur: psycopg.Cursor, alert_id: int, r) -> int:
         (alert_id, s.feature_key, s.contribution, s.direction, s.human_text,
          s.reason_code, s.source_rule_id, s.rank, s.asserted_by_rules,
          json.dumps(s.feature_value), s.value_as_of, s.value_computed_at)
-        for s in (list(r.pool.signals) + _ranked_vetoes(r))
+        for s in ranked_signals(r)
     ]
     if payload:
         cur.executemany(
@@ -448,8 +448,17 @@ def _write_subjects(cur: psycopg.Cursor, alert_id: int, r) -> None:
         )
 
 
-def _ranked_vetoes(r) -> list:
+def ranked_signals(r) -> list:
+    """The score bar of one evaluation, in order: the consolidated pool (already
+    ranked 1..n by consolidate), then any veto rows after it.
+
+    PUBLIC, and deliberately the only definition. `simulation.v1` renders the bar
+    for an evaluation that was never stored, and a second implementation of "what
+    goes on the bar, in what order" would be invisible until the simulated bar and
+    the alert bar disagreed about the same subject — which is the exact failure
+    mode §3.1 argues about for features and W3.6 #3 for the fire verdict.
+    """
     base = len(r.pool.signals)
     for i, s in enumerate(r.outcome.veto_signals, start=1):
         s.rank = base + i
-    return list(r.outcome.veto_signals)
+    return list(r.pool.signals) + list(r.outcome.veto_signals)
