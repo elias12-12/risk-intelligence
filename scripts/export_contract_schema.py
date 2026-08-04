@@ -38,7 +38,11 @@ from glassbox.contract.explanation import CaseReport, CopilotResponse  # noqa: E
 from glassbox.contract.kpis import KpiSet, KpiTile  # noqa: E402
 from glassbox.contract.models import AlertDetail, AlertSummary  # noqa: E402
 from glassbox.contract.queue import QueueEntry    # noqa: E402
-from glassbox.contract.simulation import RuleSimulation, SimulatedDecision  # noqa: E402
+from glassbox.contract.simulation import (       # noqa: E402
+    RuleSimulation,
+    SimulatedDecision,
+    TransactionSimulation,
+)
 
 # name -> (title, models). Order is irrelevant: the document is dumped with
 # sort_keys=True, which is also why appending anything to alert.v1's $defs would
@@ -57,7 +61,7 @@ CONTRACTS: dict[str, tuple[str, tuple[type, ...]]] = {
     "dispositions.v1": ("GlassBox case disposition contract, version 1",
                         (CaseVerdict, Disposition)),
     "simulation.v1": ("GlassBox simulation contract, version 1",
-                      (SimulatedDecision, RuleSimulation)),
+                      (SimulatedDecision, RuleSimulation, TransactionSimulation)),
     "catalog.v1": ("GlassBox control-plane contract, version 1",
                    (RuleSummary, RuleDetail, FeatureView, ReferenceVocabulary)),
 }

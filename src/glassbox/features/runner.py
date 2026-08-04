@@ -22,7 +22,7 @@ implementation to build when that week arrives.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Iterable
 
@@ -40,6 +40,14 @@ class RunReport:
     feature_key: str
     rows_written: int
     skipped: str | None = None
+
+
+@dataclass
+class DriverSplit:
+    """The catalog, split by whether an arriving row in one relation drives it."""
+    driven: list[str] = field(default_factory=list)
+    elsewhere: dict[str, str] = field(default_factory=dict)     # driven by another relation
+    uncomputable: dict[str, str] = field(default_factory=dict)  # the compiler refuses it
 
 
 class IncrementalRunner:
@@ -166,3 +174,36 @@ SELECT %(_fk)s, %(_et)s, w.entity_id, w.as_of,
                        features: Iterable[str] | None = None) -> list[RunReport]:
         keys = list(features) if features is not None else sorted(self.specs)
         return [self.run_feature(k, as_of, since) for k in keys]
+
+    # ---------------------------------------------------------------- drivers
+    def driven_by(self, relation: str) -> "DriverSplit":
+        """Which features an arriving row in `relation` would recompute.
+
+        Derived from the compiled spec's DRIVER relation, not from
+        `source_relation`, and the two differ exactly where it matters: a
+        transaction arriving recomputes `min_since_password_reset`, whose source
+        is `events` but whose driver is `transactions`, because the feature means
+        "minutes between the last reset and THIS MOVEMENT".
+
+        The two ways of not being driven are kept APART rather than merged into
+        one "skipped" map, because they are different claims about the answer: a
+        feature driven by the link layer was read at a stored value that is
+        correct and current, while one the compiler refuses has no computed value
+        at all. A caller publishing a scoped pass has to be able to say which,
+        and classifying by sniffing a reason string afterwards would be a second
+        definition of the distinction.
+        """
+        split = DriverSplit()
+        for key in sorted(self.specs):
+            try:
+                cf = self.compiled(key)
+            except (UnsupportedSourceKind, UnknownReducer) as exc:
+                split.uncomputable[key] = str(exc)
+                continue
+            if cf.driver_relation == relation:
+                split.driven.append(key)
+            else:
+                split.elsewhere[key] = (
+                    f"driven by {cf.driver_relation}, not {relation} — an "
+                    f"arriving {relation} row does not change it")
+        return split

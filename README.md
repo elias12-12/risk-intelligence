@@ -49,7 +49,7 @@ python scripts/kpi_report.py                # the nine tiles
 python scripts/case_report.py --alert 5 --citations   # a filing draft, sourced
 
 psql "$GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   # 87 / 68 / 64 / 58 / 0
-pytest                                                    # 369 tests
+pytest                                                    # 393 tests
 python -m glassbox serve                                  # read API on :8000
 ```
 
@@ -135,7 +135,8 @@ src/glassbox/
   features/   predicate.py  the injection boundary
               aggregations.py  17 named reducers
               compiler.py   spec -> parameterised query
-              runner.py     append-only, point-in-time-correct writes
+              runner.py     append-only, point-in-time-correct writes; and which
+                            features an arriving row in a relation drives
   graph/      builder.py    clusters from the link layer
   engine/     resolver.py   subject -> entity, over a stored graph
               pit.py        the point-in-time read
@@ -161,10 +162,11 @@ src/glassbox/
               explanation.py explanation.v1 — and the validator that refuses to
                             explain a score without its mitigators
               dispositions.py dispositions.v1 — the analyst's verdict, appended
-              simulation.py simulation.v1 — what the engine would say, unstored
+              simulation.py simulation.v1 — what the engine would say, unstored:
+                            a stored subject, a candidate rule, a charge nobody made
               catalog.py    catalog.v1 — the control plane, and what each
                             condition has actually earned
-  api/        fourteen read endpoints, six writes, two simulations
+  api/        fourteen read endpoints, six writes, three simulations
               routes_rules.py  author, edit, promote, retire — admin only
               auth.py       two demo users; reads open, writes not
 ```
@@ -358,6 +360,24 @@ alert it predicts cannot disagree. With `replay_as_of` set to a stored decision'
 we say today?"*, which is the audit question the bitemporal feature store exists
 to make answerable.
 
+**A charge that never happened can be scored, and the feature layer moves with
+it.** `POST /simulate/transaction` inserts a fabricated row, runs a feature pass
+scoped to the instant it claims to have occurred at, evaluates it, and rolls all
+three back. The pass is what makes the answer new rather than borrowed: a sixth
+card-not-present charge on `CARD-4417` makes the engine read `card_cnp_count`
+**6**, where the stored value at that instant is 5 — and
+`mcc_is_new_for_customer` keys on `txn_id`, so without the pass it could not
+exist at all and R-114's satisfaction gate would fail for a reason that has
+nothing to do with the charge. Which features the pass runs is derived from each
+compiled spec's **driver** relation, not from its source: an arriving
+transaction recomputes `min_since_password_reset`, whose source is `events`.
+Everything it did not recompute is named on the payload with the reason, as are
+four limits it cannot get past — a fabricated row cannot establish its own
+novelty (`baseline_lag`), cannot move a graph feature, cannot carry a
+`synthetic_label`, and is evaluated as a transaction subject in one lane only.
+It is **admin-only**: every other defence here is on the payload, and the role
+is the one that does not depend on anyone reading it.
+
 ---
 
 ## Extending it: what costs rows, and what costs code
@@ -399,7 +419,7 @@ and it is worth saying so out loud.
 ## Tests
 
 ```bash
-pytest                       # 369 tests, ~125s including a full rebuild
+pytest                       # 393 tests, ~125s including a full rebuild
 pytest tests/test_degraded.py -v
 ```
 
@@ -438,6 +458,7 @@ a test that mutates rules or catalog rows cannot leak.
 | `test_rule_validation.py` | Week 5 — the ways to author a rule that does nothing, each a 422; and every shipped rule still validating clean |
 | `test_simulate_rule.py` | Week 5 — a candidate rule over history, the reprice diff, and the two control-plane tables that must not move |
 | `test_publish.py` | Week 5 — the counter that moves only when the definition does, the previous definition retrievable as it was, and the transitions that are refused |
+| `test_simulate_transaction.py` | Week 5 — a charge that never happened, the scoped feature pass watched writing and watched being gone, and the ground truth that cannot be fabricated |
 | `test_shadow.py` | Week 5 — a shadow rule contributes nothing and records everything, including the veto it is not allowed to cast |
 
 ---
@@ -533,8 +554,17 @@ Port 55432 rather than 5432 so a locally-installed PostgreSQL does not collide.
   In session 2: an authored rule has something to fail against. In session 3:
   the version counter moves when a definition moves and the definition is kept
   (**D1**), and a shadow rule is scored, recorded and allowed to act on nothing
-  (**D2**). Still open there: CI does not exist, so every enforcement mechanism
-  the project's claims rest on runs only when a human runs it.
+  (**D2**). Session 4 closed no defect — it is the third simulation — and
+  answered **O4**. Still open there: CI does not exist, so every enforcement
+  mechanism the project's claims rest on runs only when a human runs it.
+- **A hypothetical charge is scored as a transaction and nothing else.**
+  `POST /simulate/transaction` evaluates the fabricated row in one lane, as a
+  `transaction` subject. The card, account, customer and merchant it references
+  are not re-evaluated, so S-077 and L-203 never appear in the answer even though
+  a real cycle would have reached them. Graph and cluster features are read at
+  their stored value, because their driver is the link layer rather than
+  `transactions`. Every one of those is named on the payload's `limits` rather
+  than left to be discovered.
 - **A rule what-if is bounded and says so.** `POST /simulate/rule` evaluates the
   most recent 2,000 subjects of the rule's own subject type by default, and
   publishes `subjects_available`, `subjects_evaluated`, `sample_cap` and

@@ -1,14 +1,19 @@
 """Evaluating without acting.
 
-Three simulations are planned (WEEK5-PLAN.md §2): re-score an existing subject,
-what-if a candidate rule over history, and score a hypothetical transaction. They
-differ in what the caller is allowed to fabricate — nothing, a rule, an event —
-and they share one property, which is that **nothing survives the call**.
+Three simulations (WEEK5-PLAN.md §2), and all three are built: re-score an
+existing subject, what-if a candidate rule over history, and score a
+hypothetical transaction. They differ in what the caller is allowed to
+fabricate — nothing, a rule, an event — and they share one property, which is
+that **nothing survives the call**.
 
-`simulation_scope` is that property, made structural. Sessions 2 and 4 fabricate
-rows to get their answer; this session's simulation writes nothing at all and
-still goes through the scope, because a discipline that applies only where it is
-currently needed is a discipline nobody can rely on later.
+`simulation_scope` is that property, made structural. The rule what-if and the
+hypothetical charge fabricate rows to get their answer; `simulate_subject`
+writes nothing at all and still goes through the scope, because a discipline
+that applies only where it is currently needed is a discipline nobody can rely
+on later. Session 4's path is the sharpest case for it: the scoped feature pass
+INSERTs into `feature_values`, which is append-only and bitemporal, so the
+difference between rolled back and committed there is the difference between a
+what-if and a corrupted audit store.
 
 Two guards, and the first one matters more than it looks:
 
@@ -32,15 +37,18 @@ silence is a what-if that reports nothing.
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
-from datetime import datetime
-from typing import Iterator, Sequence
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta
+from typing import Any, Iterator, Mapping, Sequence
+from uuid import uuid4
 
 import psycopg
 
 from ..config import reference_now
 from ..contract.catalog import RuleDraft
-from ..db import fetch_all, fetch_one
+from ..db import fetch_all, fetch_one, fetch_value
+from ..features.predicate import check_column, load_allowlist
+from ..features.runner import DriverSplit, IncrementalRunner
 from ..rules.publish import apply_definition
 from ..types import EvaluationRequest
 from .evaluation import (
@@ -66,6 +74,21 @@ class SimulationUnsafe(RuntimeError):
 class SubjectNotEvaluable(LookupError):
     """No evaluation exists for this (subject, lane) — not an error in the
     engine, an answer about the request."""
+
+
+class FabricationRefused(ValueError):
+    """A hypothetical row the engine will not pretend to have received.
+
+    Distinct from `SimulationUnsafe`, which is about the SCOPE, and from
+    `RuleInvalid`, which is about a draft's content. These are refusals about
+    what may be invented: a reference to an entity that does not exist, an id
+    that collides with a real transaction, or a column no caller is allowed to
+    fabricate. Every problem is collected, not the first one.
+    """
+
+    def __init__(self, reasons: Sequence[str]):
+        self.reasons = list(reasons)
+        super().__init__("; ".join(self.reasons))
 
 
 @contextmanager
@@ -254,6 +277,262 @@ def _labels(conn: psycopg.Connection,
             " WHERE txn_id = ANY(%s)",
             (ids,))
     }
+
+
+# --------------------------------------------------------- hypothetical charge
+# The relation a fabricated transaction arrives in. Named once: it is both the
+# table written and the driver relation the scoped feature pass selects on, and
+# those two being the same relation is the whole reason the pass is scoped.
+ARRIVAL_RELATION = "transactions"
+
+# subject column -> (dimension table, its key). The schema already has foreign
+# keys on all five (0003), so Postgres would refuse a bad reference anyway — but
+# it would refuse it by aborting the transaction mid-scope, which reaches a
+# caller as an opaque IntegrityError rather than as "there is no card CARD-XYZ".
+_REFERENCES: dict[str, tuple[str, str]] = {
+    "card_id": ("cards", "card_id"),
+    "account_id": ("accounts", "account_id"),
+    "customer_id": ("customers", "customer_id"),
+    "merchant_id": ("merchants", "merchant_id"),
+    "device_id": ("devices", "device_id"),
+}
+
+# Columns no caller may fabricate, whatever the request model happens to expose.
+#
+# `synthetic_label` is the one that matters: it is PLANTED GROUND TRUTH, the
+# denominator of §11's false-negative tile and of every precision number the
+# rule what-if publishes. A fabricated row carrying a label would be a row that
+# invented its own correct answer. Refusing it here rather than only omitting it
+# from the request model is the same layered enforcement §1 uses for the sum
+# invariant — and it is what makes "nothing labels it" an enforced limit rather
+# than a described one.
+UNFABRICABLE_COLUMNS: frozenset[str] = frozenset({"synthetic_label", "ingested_at"})
+
+# The scoped pass recomputes at exactly the fabricated instant, so its watermark
+# has to sit just below it: `since` is an exclusive lower bound, and a watermark
+# equal to occurred_at would exclude the very row the pass exists to see.
+_ARRIVAL_EPSILON = timedelta(microseconds=1)
+
+# What an unstated column means. `currency` is NOT NULL in 0003, so a charge
+# with no currency is not insertable at all; the other three are the vocabulary
+# an ordinary approved purchase carries, and they are the same defaults
+# `generate_synthetic.mk_txn` applies to every row it writes. Defined here
+# rather than on the request model so there is ONE answer to "what does an
+# unstated column mean", whether the caller is HTTP or a test with a bare dict.
+ARRIVAL_DEFAULTS: dict[str, Any] = {
+    "currency": "USD", "direction": "debit", "txn_type": "purchase",
+    "auth_result": "approved",
+}
+
+# NOT NULL on `transactions` with no sensible default. Refused before the scope
+# opens rather than left to the INSERT: a NOT NULL violation aborts mid-sandbox
+# and reaches the caller as a database error about a column, not as an answer
+# about their request.
+REQUIRED_COLUMNS: tuple[str, ...] = ("amount", "occurred_at")
+
+FABRICATION_BASIS = (
+    "A transaction that never happened, inserted inside a transaction that is "
+    "rolled back, followed by a feature pass scoped to the instant it claims to "
+    "have occurred at, then the engine's own pipeline. No transaction, feature "
+    "value, decision, alert, signal or execution was written."
+)
+
+
+@dataclass
+class TransactionWhatIf:
+    """What the engine did with a charge nobody made.
+
+    `row` is echoed back deliberately: a simulation of a fabricated event has to
+    publish the fabrication, or a reader is left comparing a score against a
+    charge they described rather than against the one that was scored.
+    """
+    row: dict[str, Any]
+    lane: str
+    as_of: datetime
+    result: EvaluationResult
+    features_recomputed: dict[str, int] = field(default_factory=dict)
+    # Two ways of not being recomputed, kept apart: a feature driven by another
+    # relation was read at a stored value that is correct, and one the compiler
+    # refuses has no computed value at all.
+    features_elsewhere: dict[str, str] = field(default_factory=dict)
+    features_uncomputable: dict[str, str] = field(default_factory=dict)
+    novelty_features: list[str] = field(default_factory=list)
+
+    @property
+    def features_not_recomputed(self) -> dict[str, str]:
+        return {**self.features_elsewhere, **self.features_uncomputable}
+
+
+def simulate_transaction(conn: psycopg.Connection, row: Mapping[str, Any],
+                         lane: str = "inline_sync", as_of: datetime | None = None,
+                         ctx: EngineContext | None = None) -> TransactionWhatIf:
+    """Score a charge that never happened, and write none of it down.
+
+    Three steps inside one scope, and the scope is the only thing standing
+    between them and a corrupted store. The middle one is why: the feature pass
+    INSERTs into `feature_values`, which is append-only and bitemporal, so a leak
+    there is not a stray row — it is a value some future decision would read as
+    the truth about an instant, with no way to tell it apart from one the runner
+    computed from real data.
+
+    **The feature pass is scoped, not full.** It runs only the features an
+    arriving `transactions` row drives, and only at the fabricated instant. A
+    full pass would recompute 21 features across the whole population to answer a
+    question about one charge; a pass that ran nothing would read the STORED
+    value for every feature keyed on a card or a customer and `absent` for every
+    feature keyed on the transaction itself — which is the same as scoring a
+    charge nobody made against evidence that predates it.
+
+    **`EngineContext` is loaded BEFORE the scope**, which is the exact opposite
+    of `simulate_rule` and for the same reason: the context snapshots the CONTROL
+    PLANE, and this simulation fabricates data rather than rules. Nothing it
+    writes could change what the context holds.
+    """
+    ctx = ctx or EngineContext.load(conn)
+    allowlist = load_allowlist(conn)
+    fabricated = prepare(conn, row, allowlist, as_of=as_of)
+    occurred_at, txn_id = fabricated["occurred_at"], fabricated["txn_id"]
+
+    with simulation_scope(conn):
+        insert_arrival(conn, fabricated, allowlist)
+        recomputed, split, novelty = scoped_feature_pass(conn, occurred_at)
+
+        plans = plan_evaluations(conn, ctx, lane, occurred_at, run_id="sim-txn",
+                                 subject_ids=[txn_id])
+        matching = [p for p in plans
+                    if p.subject.type == "transaction" and p.subject.id == txn_id]
+        if not matching:
+            raise SubjectNotEvaluable(
+                f"the fabricated transaction is not evaluable in the {lane!r} "
+                f"lane: no rule takes a transaction subject there. Only the "
+                f"transaction itself is scored — the card, account and customer "
+                f"it references are not re-evaluated"
+            )
+        result = evaluate(conn, matching[0], ctx=ctx)
+
+    return TransactionWhatIf(
+        row=dict(fabricated), lane=lane, as_of=occurred_at, result=result,
+        features_recomputed=recomputed, features_elsewhere=split.elsewhere,
+        features_uncomputable=split.uncomputable, novelty_features=novelty)
+
+
+def prepare(conn: psycopg.Connection, row: Mapping[str, Any],
+            allowlist: dict[str, frozenset[str]],
+            as_of: datetime | None = None) -> dict[str, Any]:
+    """Validate a fabricated row and fill in what it did not say.
+
+    Runs OUTSIDE the scope, on purpose: a refusal should reach the caller as an
+    answer about their request rather than as a rolled-back attempt, and a
+    reference check that ran inside the sandbox would be indistinguishable from
+    the FK doing it a moment later.
+    """
+    supplied = {k: v for k, v in row.items() if v is not None}
+    reasons: list[str] = []
+
+    for key in sorted(set(supplied) & UNFABRICABLE_COLUMNS):
+        reasons.append(
+            f"{key!r} cannot be fabricated: it is a property of a row the system "
+            f"actually received, and inventing it would let a hypothetical charge "
+            f"answer a question it is supposed to be asked")
+
+    for key in sorted(supplied):
+        if key in UNFABRICABLE_COLUMNS:
+            continue
+        try:
+            check_column(ARRIVAL_RELATION, key, allowlist)
+        except Exception as exc:                                  # noqa: BLE001
+            reasons.append(str(exc))
+
+    prepared = {k: v for k, v in supplied.items() if k not in UNFABRICABLE_COLUMNS}
+    for column, value in ARRIVAL_DEFAULTS.items():
+        prepared.setdefault(column, value)
+    prepared.setdefault("occurred_at", as_of or reference_now())
+    # An obviously fabricated id, because the row exists for the length of one
+    # rolled-back transaction and will be quoted back in an explanation.
+    prepared.setdefault("txn_id", f"SIM-{uuid4().hex[:12].upper()}")
+    # The same normalisation the generator makes: a charge in the base currency
+    # has amount_base = amount, and several reducers (zscore_of_self,
+    # pass_through_ratio) read amount_base and nothing else, so leaving it null
+    # would degrade T-021's mitigator for a reason the caller never chose.
+    if prepared.get("amount_base") is None and prepared.get("amount") is not None:
+        prepared["amount_base"] = prepared["amount"]
+
+    for column in REQUIRED_COLUMNS:
+        if prepared.get(column) is None:
+            reasons.append(
+                f"{column} is required: it is NOT NULL on `transactions`, and a "
+                f"charge with no {column} is not a charge the system could have "
+                f"received")
+
+    if fetch_value(conn, "SELECT count(*) AS n FROM transactions WHERE txn_id = %s",
+                   (prepared["txn_id"],)):
+        reasons.append(
+            f"txn_id {prepared['txn_id']!r} is a transaction that really "
+            f"happened. A fabricated row may not borrow a real id: the two would "
+            f"be indistinguishable in every feature the pass recomputes")
+
+    for column, (relation, key_column) in _REFERENCES.items():
+        value = prepared.get(column)
+        if value is None:
+            continue
+        if not fetch_value(conn, f'SELECT count(*) AS n FROM {relation} '
+                                 f'WHERE "{key_column}" = %s', (value,)):
+            reasons.append(
+                f"{column}={value!r} is not a {relation[:-1]} this system knows. "
+                f"A hypothetical charge is made up; the entities it touches are "
+                f"not")
+
+    if reasons:
+        raise FabricationRefused(reasons)
+    return prepared
+
+
+def insert_arrival(conn: psycopg.Connection, row: Mapping[str, Any],
+                    allowlist: dict[str, frozenset[str]]) -> None:
+    """The one INSERT. Column names come from the allow-list `predicate.py`
+    builds from `information_schema`; every value is bound."""
+    columns = [check_column(ARRIVAL_RELATION, k, allowlist) for k in sorted(row)]
+    placeholders = ", ".join(["%s"] * len(columns))
+    names = ", ".join(f'"{c}"' for c in columns)
+    with conn.cursor() as cur:
+        cur.execute(
+            f"INSERT INTO {ARRIVAL_RELATION} ({names}) VALUES ({placeholders})",
+            [row[c] for c in columns],
+        )
+
+
+def scoped_feature_pass(conn: psycopg.Connection, occurred_at: datetime
+                         ) -> tuple[dict[str, int], DriverSplit, list[str]]:
+    """Recompute what the arriving row drives, at the instant it arrived.
+
+    The window is one microsecond wide and closes on `occurred_at`, so the work
+    list is the fabricated row and anything real that shares its instant. What
+    that buys is precise: `card_cnp_count` is recomputed for the card WITH the
+    new charge in it, and `mcc_is_new_for_customer` — which keys on `txn_id` —
+    gets a value at all, where before the pass it would read `absent` and take
+    R-114's satisfaction gate down with it.
+    """
+    runner = IncrementalRunner(conn)
+    split = runner.driven_by(ARRIVAL_RELATION)
+
+    recomputed: dict[str, int] = {}
+    for report in runner.run_population(occurred_at, occurred_at - _ARRIVAL_EPSILON,
+                                        split.driven):
+        if report.skipped:
+            # Unreachable while `driven_by` compiles every spec first — kept so a
+            # runner that learns a new way to skip cannot report it as a success.
+            split.uncomputable[report.feature_key] = report.skipped
+        else:
+            recomputed[report.feature_key] = report.rows_written
+
+    # A novelty feature looks at history up to as_of - baseline_lag (seed 0019),
+    # so a fabricated charge cannot make its own category or country look
+    # familiar. Derived from the specs rather than named in a constant: the
+    # limit is true of whichever features carry the lag, not of the two that
+    # carry it today.
+    novelty = sorted(k for k, spec in runner.specs.items()
+                     if (spec.baseline_spec or {}).get("baseline_lag"))
+    return recomputed, split, novelty
 
 
 def _stored_decisions(conn: psycopg.Connection, subject_type: str, lane: str,

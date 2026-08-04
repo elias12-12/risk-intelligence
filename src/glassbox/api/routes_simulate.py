@@ -22,12 +22,21 @@ from ..contract.simulation import (
     RuleSimulationRequest,
     SimulatedDecision,
     SimulationRequest,
+    TransactionSimulation,
+    TransactionSimulationRequest,
     to_rule_simulation,
     to_simulation,
+    to_transaction_simulation,
 )
 from ..db import connect
 from ..engine.evaluation import EngineContext
-from ..engine.simulate import SubjectNotEvaluable, simulate_rule, simulate_subject
+from ..engine.simulate import (
+    FabricationRefused,
+    SubjectNotEvaluable,
+    simulate_rule,
+    simulate_subject,
+    simulate_transaction,
+)
 from ..rules.validate import RuleInvalid, ensure_valid, normalised
 from .auth import Principal, require_role
 
@@ -98,3 +107,40 @@ def simulate_candidate_rule(body: RuleSimulationRequest,
         return to_rule_simulation(whatif, examples=body.examples,
                                   diff_limit=body.diff_limit)
         # No commit, and simulation_scope has already rolled the draft back.
+
+
+@router.post("/simulate/transaction", response_model=TransactionSimulation)
+def simulate_hypothetical_transaction(
+        body: TransactionSimulationRequest,
+        who: Principal = Depends(require_role("admin"))):
+    """Score a charge that never happened.
+
+    **Admin only** (WEEK5-PLAN O4). This is the one simulation that FABRICATES
+    AN EVENT, and an event is the thing this system's whole record is made of: a
+    payload showing a score against a transaction id is one screenshot away from
+    being read as something that occurred. Every other defence here is on the
+    payload — `persisted: false`, the fabricated row echoed as inserted, four
+    named limits — and the role is the defence that does not depend on anyone
+    reading it.
+
+    The refusals are answers, not errors. An unknown card, a borrowed real
+    `txn_id` and a fabricated `synthetic_label` all come back as a 422 listing
+    every problem at once, from a check that runs BEFORE the sandbox opens.
+    """
+    with connect() as conn:
+        ctx = EngineContext.load(conn)
+        try:
+            whatif = simulate_transaction(conn, body.transaction.columns(),
+                                          lane=body.lane, ctx=ctx)
+        except FabricationRefused as exc:
+            raise HTTPException(status_code=422, detail=exc.reasons) from exc
+        except SubjectNotEvaluable as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        try:
+            return to_transaction_simulation(whatif, ctx.rules)
+        except Exception as exc:  # noqa: BLE001
+            if is_contract_violation(exc):
+                raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise
+        # No commit. The row, its feature values and its decision were all
+        # written inside a scope that has already rolled back.

@@ -30,7 +30,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..engine.simulate import DEFAULT_SAMPLE_CAP, SAMPLING_BASIS, SHADOW_NOTE
+from ..engine.simulate import (
+    ARRIVAL_DEFAULTS,
+    DEFAULT_SAMPLE_CAP,
+    FABRICATION_BASIS,
+    SAMPLING_BASIS,
+    SHADOW_NOTE,
+)
 from ..types import jsonable
 from .catalog import RuleDraft
 from .models import Action, ContractViolation, Evidence, Signal, Subject
@@ -583,6 +589,214 @@ def _diff(whatif, result) -> DecisionDiff | None:
         stored_action=stored["action_taken"], simulated_action=action,
         stored_source_rule=stored["action_source_rule"],
         simulated_source_rule=result.outcome.action_source_rule)
+
+
+# ------------------------------------------------------- hypothetical charge
+class FabricationLimit(BaseModel):
+    """One thing this answer cannot tell you, and why.
+
+    Published as rows rather than as one prose caveat because they are not all
+    the same KIND of limit — two are properties of the feature layer, one is a
+    property of what was evaluated, one is a property of what a fabricated row
+    is allowed to carry — and because `features` lets a console name the
+    specific keys instead of asserting a general shape.
+    """
+    model_config = STRICT
+
+    code: str
+    detail: str
+    features: list[str] = Field(default_factory=list)
+
+
+class ScopedFeaturePass(BaseModel):
+    """What the fabricated row was actually scored against.
+
+    Without this a caller cannot tell a feature that was recomputed with the new
+    charge in it from one that was read at its stored value — and those are
+    different claims about the same number. `card_cnp_count` is the first kind;
+    a graph feature is the second.
+    """
+    model_config = STRICT
+
+    as_of: datetime
+    recomputed: dict[str, int] = Field(default_factory=dict)   # key -> rows written
+    not_recomputed: dict[str, str] = Field(default_factory=dict)  # key -> why
+
+
+class TransactionSimulation(BaseModel):
+    """A charge that never happened, scored, with nothing written down.
+
+    A sibling on simulation.v1, and `decision` is a `SimulatedDecision` reused
+    whole rather than flattened: the score bar for a fabricated charge and the
+    score bar for a stored one are the same object, and the §1 invariants are
+    already enforced on it.
+
+    `fabricated` is the row as INSERTED, including everything the caller left
+    unstated — a reader comparing a score against the charge they described
+    rather than the one that was scored is exactly the confusion this endpoint
+    is most able to cause.
+    """
+    model_config = STRICT
+
+    persisted: Literal[False] = False
+    fabricated: dict[str, Any] = Field(default_factory=dict)
+    lane: str
+    features: ScopedFeaturePass
+    decision: SimulatedDecision
+    limits: list[FabricationLimit] = Field(default_factory=list)
+    basis: str = FABRICATION_BASIS
+
+
+def to_transaction_simulation(whatif, rules: dict) -> TransactionSimulation:
+    """`TransactionWhatIf` -> the published shape.
+
+    The limits are DERIVED from what the pass actually did, not written out as
+    a constant: `not_recomputed` comes back from the runner keyed by feature
+    with the reason attached, and the novelty list is whichever features carry a
+    `baseline_lag` today rather than the two that carry it now. A caveat that
+    cannot go stale is the same argument session 1 made for the disposition
+    tiles.
+    """
+    elsewhere = sorted(whatif.features_elsewhere)
+    uncomputable = sorted(whatif.features_uncomputable)
+
+    limits = [
+        FabricationLimit(
+            code="novelty_cannot_self_establish",
+            detail=(
+                "Novelty features look at history up to as_of minus their "
+                "baseline_lag (seed 0019), so the fabricated charge cannot make "
+                "its own merchant category or country look familiar — and "
+                "equally cannot be made familiar by anything else at the same "
+                "instant. That is the feature layer being correct, and it means "
+                "a fabricated FIRST charge of a kind reads as new however many "
+                "you fabricate."),
+            features=list(whatif.novelty_features)),
+        FabricationLimit(
+            code="not_recomputed",
+            detail=(
+                "These features are driven by a relation other than "
+                "`transactions` — the link layer, the event log, the cluster "
+                "members — so an arriving charge does not change them and the "
+                "scoped pass did not run them. They were read at their STORED "
+                "value, which is the right answer for a graph that a "
+                "hypothetical charge would not have rebuilt anyway."),
+            features=elsewhere),
+        FabricationLimit(
+            code="no_ground_truth",
+            detail=(
+                "The row carries no synthetic_label, and the engine refuses one: "
+                "it is planted ground truth, and a fabricated charge that "
+                "labelled itself would be answering the question it was asked. "
+                "So this decision sits outside every ground-truth join — no "
+                "false-negative rate, no precision, no §11 tile counts it."),
+            features=[]),
+        FabricationLimit(
+            code="transaction_subject_only",
+            detail=(
+                "Only the fabricated transaction is evaluated, in one lane. The "
+                "card, account, customer, merchant and device it references are "
+                "not re-evaluated, so a rule whose subject is one of those — "
+                "S-077 on an account, L-203 on a network — does not appear here "
+                "even though the charge would have reached it in a real cycle."),
+            features=[]),
+    ]
+    if uncomputable:
+        limits.append(FabricationLimit(
+            code="unsupported_spec",
+            detail=("The runner cannot compute these at all — the `sequence` "
+                    "source kind is still unbuilt — so they were read at their "
+                    "stored value, hand-seeded or absent."),
+            features=uncomputable))
+
+    return TransactionSimulation(
+        fabricated=jsonable_row(whatif.row),
+        lane=whatif.lane,
+        features=ScopedFeaturePass(
+            as_of=whatif.as_of,
+            recomputed=dict(whatif.features_recomputed),
+            not_recomputed=dict(whatif.features_not_recomputed)),
+        decision=to_simulation(whatif.result, rules, as_of=whatif.as_of),
+        limits=limits,
+    )
+
+
+def jsonable_row(row: dict) -> dict[str, Any]:
+    """The fabricated row, as JSON. `Decimal` and `datetime` both appear in it —
+    the first through `jsonable`, the second by isoformat, because the echo has
+    to survive a round trip through the wire and back into a test."""
+    out: dict[str, Any] = {}
+    for key, value in sorted(row.items()):
+        out[key] = value.isoformat() if isinstance(value, datetime) else jsonable(value)
+    return out
+
+
+class TransactionDraft(BaseModel):
+    """A charge to invent. The writable subset of `transactions`, closed.
+
+    Every reference is to an entity that must ALREADY EXIST — `transactions` has
+    foreign keys to cards, accounts, customers, merchants and devices (0003), and
+    the engine checks them before the sandbox opens so an unknown card is an
+    answer rather than an IntegrityError. The console picks a real card and makes
+    up the charge.
+
+    `synthetic_label` is deliberately absent and is refused by the engine even if
+    a caller reaches it another way: it is planted ground truth.
+
+    An unstated `currency`, `direction`, `txn_type` or `auth_result` takes the
+    value in `engine.simulate.ARRIVAL_DEFAULTS`, which is the same default
+    `generate_synthetic.mk_txn` applies to every row it writes. `amount_base`
+    falls back to `amount`, and `txn_id` is generated as `SIM-…` when unstated.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    txn_id: str | None = None
+    occurred_at: datetime | None = None
+    amount: Decimal
+    currency: str | None = None
+    amount_base: Decimal | None = None
+    direction: str | None = None
+    txn_type: str | None = None
+
+    card_id: str | None = None
+    account_id: str | None = None
+    customer_id: str | None = None
+    merchant_id: str | None = None
+    device_id: str | None = None
+
+    mcc: str | None = None
+    channel: str | None = None
+    entry_mode: str | None = None
+    auth_result: str | None = None
+    decline_reason: str | None = None
+
+    txn_country: str | None = None
+    txn_lat: Decimal | None = None
+    txn_lon: Decimal | None = None
+    ip_address: str | None = None
+
+    payee_id: str | None = None
+    counterparty: str | None = None
+    billing_country: str | None = None
+    shipping_country: str | None = None
+
+    def columns(self) -> dict[str, Any]:
+        """The stated columns only. An omitted field is not the same as a null
+        one — `prepare` fills the omissions, and a column explicitly set to null
+        would be indistinguishable from an omission if this returned both."""
+        return {k: v for k, v in self.model_dump().items() if v is not None}
+
+
+class TransactionSimulationRequest(BaseModel):
+    """What an admin sends to /simulate/transaction (WEEK5-PLAN O4)."""
+    model_config = ConfigDict(extra="forbid")
+
+    transaction: TransactionDraft
+    lane: Literal["inline_sync", "async"] = "inline_sync"
+
+
+assert set(ARRIVAL_DEFAULTS) <= set(TransactionDraft.model_fields), (
+    "a default exists for a column the draft cannot express")
 
 
 class SimulationRequest(BaseModel):
