@@ -9,6 +9,19 @@ Two relations are added to that list and both are the same alert:
 `rule_definitions`, which is where `clear_text` and `recommended_action_text`
 live — §13 names both as the source for two of the three chips.
 
+**Session 3 adds the two version stores, and that is a widening of a boundary
+this project treats as load-bearing, so here is the argument.** §13's constraint
+4 requires the report to cite the rule version set. Until the publish path
+existed the report could only print those numbers and admit they resolved to
+nothing; now that they resolve, the honest thing to print is which definitions
+are actually retrievable — and that cannot be known without looking. The lookup
+is keyed on `(rule_id, version)` pairs that are already ON the alert, so it
+resolves a pointer the alert carries rather than reaching for a fact about
+anything else. It is not free-text recall and it cannot see another case: the
+`WHERE` clause has no degrees of freedom. Everything the boundary was drawn
+against — `transactions`, `feature_values`, `case_outcomes`, other alerts — is
+still outside it, and `test_explain.py`'s cursor hook still proves it.
+
 Nothing else is reachable from here. `transactions`, `feature_values`,
 `case_outcomes` and every other alert are all outside the boundary, and
 test_explain.py enforces that with a cursor hook rather than trusting this
@@ -36,7 +49,8 @@ from ..db import fetch_all
 
 ALLOWED_RELATIONS = (
     "alerts", "decisions", "alert_signals", "alert_subjects",
-    "action_executions", "rule_definitions",
+    "action_executions", "rule_definitions", "rule_versions",
+    "feature_catalog_versions",
 )
 
 
@@ -46,6 +60,11 @@ class AlertEvidence:
     alert: AlertDetail
     executions: list[ExecutionRecord]
     rules: dict[str, dict]          # rule_id -> clear_text / recommended / threshold
+    # Versions this decision recorded that no published definition sits behind.
+    # Empty on anything published through `rules/publish.py` or backfilled by
+    # seed 0031 — which is everything here — and non-empty is a real audit gap
+    # the report has to state rather than paper over.
+    unresolved_versions: list[str] = field(default_factory=list)
 
     @property
     def aggravating(self) -> list:
@@ -80,7 +99,40 @@ def load(conn: psycopg.Connection, alert_id: int) -> AlertEvidence | None:
 
     return AlertEvidence(alert=alert,
                          executions=read_executions(conn, alert_id=alert_id),
-                         rules=rules)
+                         rules=rules,
+                         unresolved_versions=_unresolved_versions(conn, alert))
+
+
+def _unresolved_versions(conn: psycopg.Connection, alert: AlertDetail) -> list[str]:
+    """Which of this decision's recorded versions have no stored definition.
+
+    Asked of the version stores directly rather than assumed either way. Before
+    session 3 the answer was "all of them" and the report said so; asserting the
+    opposite now without checking would be the same unearned claim in the other
+    direction.
+    """
+    rule_set = alert.evidence.rule_version_set or {}
+    feature_set = alert.evidence.feature_version_set or {}
+    missing: list[str] = []
+
+    if rule_set:
+        found = {(r["rule_id"], r["version"]) for r in fetch_all(
+            conn,
+            "SELECT rule_id, version FROM rule_versions WHERE rule_id = ANY(%s)",
+            (sorted(rule_set),))}
+        missing += [f"rule {k} v{v}" for k, v in sorted(rule_set.items())
+                    if (k, v) not in found]
+
+    if feature_set:
+        found = {(r["feature_key"], r["spec_version"]) for r in fetch_all(
+            conn,
+            "SELECT feature_key, spec_version FROM feature_catalog_versions "
+            " WHERE feature_key = ANY(%s)",
+            (sorted(feature_set),))}
+        missing += [f"feature {k} v{v}" for k, v in sorted(feature_set.items())
+                    if (k, v) not in found]
+
+    return missing
 
 
 @dataclass

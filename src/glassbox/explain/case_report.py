@@ -16,10 +16,13 @@ Two things this report says that a generated document usually does not:
     failure §4 exists to prevent. `alert_signals` carries it precisely so the
     report does not have to go and look.
 
-  * that `rule_version_set` names versions which resolve to nothing.
-    `rule_versions` and `feature_catalog_versions` are still empty, so printing
-    "R-114 v1" and stopping would imply a stored definition sitting behind that
-    number. It is an audit gap, and a report that hides it is worse than the gap.
+  * whether `rule_version_set` and `feature_version_set` actually RESOLVE.
+    Through Week 4 they did not — the version stores were empty — and the report
+    said so rather than printing "R-114 v1" and letting the number imply a stored
+    definition. Session 3's publish path fills them, so the report now asks
+    (`evidence._unresolved_versions`) and reports the answer either way. The
+    claim is checked in both directions, which is the only version of it worth
+    printing.
 
 `generated_from` is the decision's `decided_at`, not `now()`. Two reports of the
 same case must be identical, and a timestamp that moves makes a diff useless for
@@ -136,13 +139,19 @@ def build_report(evidence: AlertEvidence) -> CaseReport:
          + ", ".join(f"`{k}` v{v}" for k, v in
                      sorted(alert.evidence.feature_version_set.items())) or "- none")
 
-    unresolvable = sorted(f"{k} v{v}" for k, v in alert.evidence.rule_version_set.items())
+    unresolvable = list(ev.unresolved_versions)
     if unresolvable:
         line()
-        line("> The version numbers above are recorded but **do not resolve**: "
-             "`rule_versions` and `feature_catalog_versions` are empty in this "
-             "build, so no stored definition sits behind them. This is a known "
-             "audit gap, not a claim that the definitions were retrieved.")
+        line("> The following recorded versions **do not resolve** — no stored "
+             "definition sits behind them: " + ", ".join(unresolvable) + ". "
+             "This is an audit gap, not a claim that the definitions were "
+             "retrieved.")
+    else:
+        line()
+        line("> Every version above **resolves**: the definition in force at "
+             "decision time is stored in `rule_versions` / "
+             "`feature_catalog_versions` and can be retrieved as it was, not as "
+             "it is now.")
     line()
 
     # ---------------------------------------------------------------- actions

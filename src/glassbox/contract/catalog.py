@@ -27,12 +27,13 @@ evaluated.** A newly authored rule has no ledger rows behind it. Publishing
 zeroes there would render as "fires 0% of the time, precision 0%" — a measurement
 of nothing that looks exactly like a measurement of something bad.
 
-**`takes_action` is computed, not assumed.** A `shadow` rule is supposed to score
-without acting. Today it acts (WEEK5-PLAN D2 — `Rule.status` is loaded and never
-read again), so this field publishes `true` for a shadow rule and says so in its
-own docstring. Session 3 builds the gate and the field starts publishing `false`
-without a console change. A defect that is visible on the wire is one somebody
-can find; one that lives only in a plan file is one they cannot.
+**`takes_action` is computed, not assumed.** A `shadow` rule scores without
+acting, and `evaluated` and `takes_action` are therefore different questions:
+the engine loads it, resolves it, reads its features point-in-time and records
+every condition it looked at, and precedence never sees it. This field published
+`true` for a shadow rule until session 3 built the gate (WEEK5-PLAN D2) — the
+defect was on the wire before it was fixed, which is where a defect can be found
+rather than only described.
 """
 from __future__ import annotations
 
@@ -43,7 +44,7 @@ from typing import Any
 import psycopg
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..catalog import EVALUATED_RULE_STATUSES, RULE_STATUSES
+from ..catalog import EVALUATED_RULE_STATUSES, RULE_STATUSES, takes_action
 from ..db import fetch_all, fetch_one
 from ..engine.conditions import (
     EQUALITY_OPERATORS,
@@ -120,10 +121,12 @@ class ConditionView(BaseModel):
 class RuleVersionView(BaseModel):
     """One published snapshot of a rule.
 
-    `rule_versions` is empty for every rule shipped so far — nothing has ever
-    published — so a stored `rule_version_set` names a version with no definition
-    behind it. Session 3 closes that. Until it does, `GET /rules/{id}` returns an
-    empty list here and `versions_resolve: false` rather than implying history.
+    `rule_versions` was empty for every rule shipped through Week 4 — nothing
+    had ever published — so a stored `rule_version_set` named a version with no
+    definition behind it. Session 3's publish path writes one on every save,
+    promotion and retirement, and seed `0031` backfilled the definitions that
+    predate it, so `versions_resolve` is now a fact about this rule rather than
+    a statement about the project.
     """
     model_config = STRICT
 
@@ -154,11 +157,10 @@ class RuleSummary(BaseModel):
     created_at: datetime | None = None
     shadow_since: datetime | None = None
 
-    # Does the engine load this rule at all.
+    # Does the engine load and score this rule at all. True for shadow.
     evaluated: bool = True
-    # Does a decision this rule reaches let it TAKE the action it names. See the
-    # module docstring: this is `true` for a shadow rule today, which is D2 and
-    # not a description of what shadow mode is supposed to mean.
+    # Does a decision this rule reaches let it TAKE the action it names. False
+    # for shadow: it is scored and recorded and it acts on nothing (0030).
     takes_action: bool = True
     status_caveat: str | None = None
 
@@ -318,11 +320,13 @@ def _summary_fields(row: dict) -> dict:
     caveat = None
     if status == "shadow":
         caveat = (
-            "Authored as shadow. The engine currently scores, alerts and issues "
-            "preventive actions for a shadow rule exactly as it does for an "
-            "active one — the status is loaded and never read again "
-            "(WEEK5-PLAN D2). Until the gate exists, shadow is a label, not a "
-            "guarantee."
+            "Shadow. The engine evaluates this rule on every applicable subject "
+            "and records what it found — its conditions land in "
+            "decision_conditions flagged `is_shadow`, and the action it would "
+            "have taken lands on decisions.shadow_action — but it contributes no "
+            "signal to a published score, holds no authority, carries no "
+            "severity and establishes no veto. It raises no alert and issues no "
+            "execution. Promote it to make it act."
         )
     elif status == "inactive":
         caveat = "Inactive: not loaded by the engine, and retained because a rule that ever acted cannot be deleted."
@@ -345,8 +349,9 @@ def _summary_fields(row: dict) -> dict:
         "created_at": row["created_at"],
         "shadow_since": row["shadow_since"],
         "evaluated": evaluated,
-        # D2, on the wire. Session 3 makes this `status == 'active'`.
-        "takes_action": evaluated,
+        # D2, closed. `evaluated` and `takes_action` are now different
+        # questions, and a shadow rule answers them differently.
+        "takes_action": takes_action(status),
         "status_caveat": caveat,
     }
 
@@ -382,8 +387,10 @@ def read_rule(conn: psycopg.Connection, rule_id: str) -> RuleDetail | None:
         clear_text=row["clear_text"],
         condition_set=conditions,
         versions=versions,
-        # False for every rule shipped so far: nothing has ever published, so a
-        # stored rule_version_set names a number with no definition behind it.
+        # The rule's CURRENT version has a stored definition behind it, so a
+        # decision recording it can be replayed against what was in force. False
+        # only for a rule written straight into the table without publishing —
+        # which the seeds no longer do and the API cannot do.
         versions_resolve=any(v.version == row["version"] for v in versions),
     )
 

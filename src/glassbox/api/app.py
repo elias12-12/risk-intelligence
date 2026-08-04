@@ -9,6 +9,7 @@ from .routes_cases import router as cases_router
 from .routes_explain import router as explain_router
 from .routes_kpis import router as kpi_router
 from .routes_queue import router as queue_router
+from .routes_rules import router as rules_router
 from .routes_simulate import router as simulate_router
 
 app = FastAPI(
@@ -18,11 +19,15 @@ app = FastAPI(
                  "queue.v1, executions.v1, kpis.v1, explanation.v1, "
                  "dispositions.v1, simulation.v1 and catalog.v1. Reads are "
                  "open; the surfaces that leave a mark — writing a disposition, "
-                 "and running the engine on demand — require a bearer token, "
-                 "and the rule what-if additionally requires the admin role."),
+                 "running the engine on demand, and writing to the control "
+                 "plane — require a bearer token, and everything that touches a "
+                 "rule requires the admin role. A published rule lands in "
+                 "shadow: it is scored and recorded, and it acts on nothing "
+                 "until it is promoted."),
 )
 app.include_router(router)
 app.include_router(catalog_router)
+app.include_router(rules_router)
 app.include_router(queue_router)
 app.include_router(kpi_router)
 app.include_router(explain_router)

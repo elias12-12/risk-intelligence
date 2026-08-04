@@ -65,6 +65,20 @@ class EngineContext:
 
 
 @dataclass
+class ShadowOutcome:
+    """What this decision WOULD have been had the shadow rules been active.
+
+    Stored on the decision (0030) rather than computed on demand, because the
+    promotion question — how often does this rule change the outcome, and to
+    what — is asked about history, and history is not re-runnable once the rule
+    has been promoted.
+    """
+    rules: list[str]
+    score: Decimal
+    action: str
+
+
+@dataclass
 class EvaluationResult:
     request: EvaluationRequest
     rule_scores: list[RuleScore]
@@ -77,6 +91,12 @@ class EvaluationResult:
     pit_bound_at: datetime
     primary_rule_name: str | None = None
     decision_id: int | None = None
+    # Scored exactly like a live rule and excluded from `pool` and `outcome`.
+    # Kept separate rather than flagged in-place so that every existing consumer
+    # of `rule_scores` — precedence, consolidation, the traces, six test modules
+    # — keeps meaning "the rules that decided this".
+    shadow_scores: list[RuleScore] = field(default_factory=list)
+    shadow: ShadowOutcome | None = None
 
 
 # ---------------------------------------------------------------- 0.5 plan
@@ -234,6 +254,7 @@ def evaluate_batch(conn: psycopg.Connection, ctx: EngineContext,
     results: list[EvaluationResult] = []
     for i, req in enumerate(requests):
         rule_scores: list[RuleScore] = []
+        shadow_scores: list[RuleScore] = []
         degraded: list[str] = []
         feature_versions: dict[str, int] = {}
         rule_versions: dict[str, int] = {}
@@ -245,14 +266,24 @@ def evaluate_batch(conn: psycopg.Connection, ctx: EngineContext,
                 for c in rule.conditions if (i, rule.rule_id, c.feature_key) in reads
             }
             evaluation = conditions_mod.evaluate_rule(rule, rule_reads)
-            rule_scores.append(scoring_mod.score_rule(rule, evaluation))
+            score = scoring_mod.score_rule(rule, evaluation)
+            acting = catalog_mod.takes_action(rule.status)
+            (rule_scores if acting else shadow_scores).append(score)
+            # Recorded for both: a shadow rule's version was in force at this
+            # evaluation, and shadow_action on this row is only replayable if the
+            # definition behind it can be found.
             rule_versions[rule.rule_id] = rule.version
             for key, read in rule_reads.items():
                 if read.spec_version is not None:
                     feature_versions[key] = read.spec_version
-            for key in evaluation.degraded:
-                if key not in degraded:
-                    degraded.append(key)
+            if acting:
+                # LIVE ONLY. degraded_features describes the evidence behind the
+                # PUBLISHED decision — §5 hangs its preventive-authority policy
+                # off it — and a shadow rule missing a mitigator says nothing
+                # about a decision it was not allowed to touch.
+                for key in evaluation.degraded:
+                    if key not in degraded:
+                        degraded.append(key)
             max_bound = max(max_bound, bounds[(i, rule.rule_id)])
 
         pool = consolidate_mod.consolidate(rule_scores)
@@ -265,8 +296,33 @@ def evaluate_batch(conn: psycopg.Connection, ctx: EngineContext,
             request=req, rule_scores=rule_scores, pool=pool, band=band,
             outcome=outcome, degraded_features=sorted(degraded),
             rule_version_set=rule_versions, feature_version_set=feature_versions,
-            pit_bound_at=max_bound, primary_rule_name=primary))
+            pit_bound_at=max_bound, primary_rule_name=primary,
+            shadow_scores=shadow_scores,
+            shadow=_shadow_outcome(ctx, rule_scores, shadow_scores)))
     return results
+
+
+def _shadow_outcome(ctx: EngineContext, live: list[RuleScore],
+                    shadow: list[RuleScore]) -> ShadowOutcome | None:
+    """The same decision, computed as if the shadow rules were active.
+
+    Live AND shadow together, not shadow alone: promoting a rule does not move
+    it into an empty room. A shadow veto has to be able to cap a live action, and
+    a shadow aggravator sharing a feature with a live one has to be deduplicated
+    against it (§6) — measuring the shadow rule on its own would report a
+    combined score that consolidation would never produce.
+
+    None when nothing is in shadow, which is every decision on the shipped
+    fixtures. The columns stay NULL rather than repeating the live answer.
+    """
+    if not shadow:
+        return None
+    both = live + shadow
+    return ShadowOutcome(
+        rules=sorted(rs.rule_id for rs in shadow),
+        score=consolidate_mod.consolidate(both).subject_score,
+        action=precedence_mod.decide(both, ctx.rules, ctx.severity).action,
+    )
 
 
 def _dedup_pairs(pairs):

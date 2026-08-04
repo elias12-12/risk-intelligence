@@ -21,16 +21,19 @@ Two guards, and the first one matters more than it looks:
     request handler that opened one — psycopg uses a SAVEPOINT, so the caller's
     transaction survives and only the simulation's work is undone.
 
-Simulation is also the machinery shadow mode wants (D2): a shadow rule is one
-that evaluates and persists a decision but takes no action, and a simulation is
-one that evaluates and persists nothing. Session 3 builds the first out of the
-second rather than writing a second evaluator.
+Shadow mode (D2, session 3) is the neighbouring idea and is deliberately NOT
+built on this file: a shadow rule evaluates and persists a decision while taking
+no action, which is a property of the rule rather than of the call, so it lives
+in `evaluate_batch` where the live and shadow rule sets are separated once. The
+overlap shows up in the other direction — `simulate_rule` applies its candidate
+as `active` inside the sandbox, because a what-if on a rule the gate would
+silence is a what-if that reports nothing.
 """
 from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Iterator, Sequence
 
 import psycopg
@@ -38,6 +41,7 @@ import psycopg
 from ..config import reference_now
 from ..contract.catalog import RuleDraft
 from ..db import fetch_all, fetch_one
+from ..rules.publish import apply_definition
 from ..types import EvaluationRequest
 from .evaluation import (
     EngineContext,
@@ -127,6 +131,15 @@ SAMPLING_BASIS = (
 )
 
 
+SHADOW_NOTE = (
+    "A candidate is evaluated as if ACTIVE, whatever status it asks for: the "
+    "question a what-if answers is what the rule would DO. Publishing it lands "
+    "it in shadow, where (migration 0030) it scores, records its conditions and "
+    "records the action it would have taken — and takes none — until an admin "
+    "promotes it."
+)
+
+
 @dataclass
 class RuleWhatIf:
     """Everything the published what-if is derived from, and nothing published.
@@ -145,6 +158,7 @@ class RuleWhatIf:
     results: list[EvaluationResult]
     labels: dict[str, str | None]           # trigger id -> synthetic_label
     stored: dict[str, dict]                 # subject_id -> its stored decision
+    evaluated_as: str = "active"
 
 
 def simulate_rule(conn: psycopg.Connection, draft: RuleDraft,
@@ -168,6 +182,12 @@ def simulate_rule(conn: psycopg.Connection, draft: RuleDraft,
     transaction that is rolled back, so nothing is lost — but it is worth knowing
     it happens, because it means a what-if on an existing rule is not a read-only
     operation at the storage layer even though it is one from outside.
+
+    **The candidate is applied as `active`**, whatever status it carries. After
+    the shadow gate (0030) a rule in shadow contributes no signal and holds no
+    authority, so simulating one as authored would report — accurately and
+    uselessly — that it does nothing. `evaluated_as` rides on the payload so the
+    substitution is stated rather than assumed.
     """
     as_of = as_of or reference_now()
     existing = fetch_one(
@@ -176,7 +196,8 @@ def simulate_rule(conn: psycopg.Connection, draft: RuleDraft,
     mode = "replacement" if existing else "draft"
 
     with simulation_scope(conn):
-        _apply_draft(conn, draft, replacing=bool(existing))
+        apply_definition(conn, draft.model_copy(update={"status": "active"}),
+                         replacing=bool(existing), created_by="simulation")
         ctx = EngineContext.load(conn)          # AFTER. See the docstring.
 
         plans = [p for p in plan_evaluations(conn, ctx, draft.execution_mode,
@@ -212,60 +233,6 @@ def _most_recent(plans: list[EvaluationRequest], cap: int) -> list[EvaluationReq
     newest = sorted(plans, key=lambda p: (p.occurred_at, p.subject.id),
                     reverse=True)[:cap]
     return sorted(newest, key=lambda p: (p.occurred_at, p.subject.id))
-
-
-def _apply_draft(conn: psycopg.Connection, draft: RuleDraft, replacing: bool) -> None:
-    lag = timedelta(seconds=draft.evaluation_lag_seconds or 0)
-    fields = (draft.name, draft.description, draft.subject_type,
-              draft.execution_mode, draft.action, draft.review_threshold,
-              draft.prevent_threshold, draft.is_veto, draft.combine.upper(),
-              draft.status, lag, draft.recommended_action_text, draft.clear_text)
-
-    with conn.cursor() as cur:
-        if replacing:
-            cur.execute(
-                """
-                UPDATE rule_definitions
-                   SET name = %s, description = %s, subject_type = %s,
-                       execution_mode = %s, action = %s, review_threshold = %s,
-                       prevent_threshold = %s, is_veto = %s, combine = %s,
-                       status = %s, evaluation_lag = %s,
-                       recommended_action_text = %s, clear_text = %s
-                 WHERE rule_id = %s
-                """,
-                (*fields, draft.rule_id),
-            )
-            # Cascades to decision_conditions. Rolled back with everything else.
-            cur.execute("DELETE FROM rule_conditions WHERE rule_id = %s",
-                        (draft.rule_id,))
-        else:
-            cur.execute(
-                """
-                INSERT INTO rule_definitions
-                    (rule_id, name, description, subject_type, execution_mode,
-                     action, review_threshold, prevent_threshold, is_veto,
-                     combine, status, evaluation_lag, recommended_action_text,
-                     clear_text, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        'simulation')
-                """,
-                (draft.rule_id, *fields),
-            )
-
-        for cond in draft.conditions:
-            cur.execute(
-                """
-                INSERT INTO rule_conditions
-                    (rule_id, condition_group, feature_key, operator,
-                     threshold_num, threshold_text, contribution_points,
-                     reason_code, signal_template, is_required)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                (draft.rule_id, cond.condition_group, cond.feature_key,
-                 cond.operator, cond.threshold_num, cond.threshold_text,
-                 cond.contribution_points, cond.reason_code,
-                 cond.signal_template, cond.is_required),
-            )
 
 
 def _labels(conn: psycopg.Connection,

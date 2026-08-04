@@ -233,12 +233,37 @@ def test_the_report_cites_the_full_evidence_set(conn, burst_alert_id):
     assert any(label.startswith("feature value:") for label in labels)
 
 
-def test_the_report_admits_its_versions_resolve_to_nothing(conn, burst_alert_id):
-    """rule_versions is empty. Printing "R-114 v1" and stopping would imply a
-    stored definition sitting behind the number."""
-    assert fetch_value(conn, "SELECT count(*) FROM rule_versions") == 0
+def test_the_report_says_its_versions_resolve_and_has_checked(conn, burst_alert_id):
+    """This test used to assert the opposite, and that was the honest reading at
+    the time: `rule_versions` was empty, so printing "R-114 v1" and stopping
+    would have implied a stored definition sitting behind the number.
+
+    Session 3's publish path and seed 0031 put the definitions there. The report
+    is not allowed to switch to the flattering sentence on faith — it asks the
+    version stores (`evidence._unresolved_versions`) and prints what it found,
+    which is why the next test can still make it print the other one.
+    """
+    assert fetch_value(conn, "SELECT count(*) FROM rule_versions") >= 4
     report = build_report(load(conn, burst_alert_id))
-    assert report.unresolvable_versions
+    assert report.unresolvable_versions == []
+    assert "do not resolve" not in report.markdown
+    assert "**resolves**" in report.markdown
+
+
+def test_a_version_with_no_stored_definition_is_still_named_as_a_gap(conn,
+                                                                    burst_alert_id):
+    """The claim is checked in both directions.
+
+    Deleting R-114's published definition inside this transaction is the same
+    situation as a decision stored before 0031, or a rule inserted straight into
+    the table: the number is recorded and nothing sits behind it. An audit gap
+    that stops being reported the moment the happy path is common is worse than
+    one that was never reported at all.
+    """
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM rule_versions WHERE rule_id = 'R-114'")
+    report = build_report(load(conn, burst_alert_id))
+    assert any(v.startswith("rule R-114 v") for v in report.unresolvable_versions)
     assert "do not resolve" in report.markdown
 
 

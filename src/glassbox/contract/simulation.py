@@ -30,7 +30,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..engine.simulate import DEFAULT_SAMPLE_CAP, SAMPLING_BASIS
+from ..engine.simulate import DEFAULT_SAMPLE_CAP, SAMPLING_BASIS, SHADOW_NOTE
 from ..types import jsonable
 from .catalog import RuleDraft
 from .models import Action, ContractViolation, Evidence, Signal, Subject
@@ -68,6 +68,12 @@ class RuleTrace(BaseModel):
     veto_established: bool | None = None      # None = indeterminate (§5)
     preventive_authority: bool = True
     degraded_features: list[str] = Field(default_factory=list)
+    # A shadow rule is evaluated and traced exactly like a live one and is
+    # excluded from the score, the signals and the action (migration 0030).
+    # Published here because "which rules looked at this" is the question a
+    # trace answers, and a rule that looked and was not allowed to speak is
+    # still a rule that looked.
+    shadow: bool = False
 
 
 class SimulatedDecision(BaseModel):
@@ -90,6 +96,14 @@ class SimulatedDecision(BaseModel):
     # produced a case. NOT "the score is in an elevated band": banding on a
     # consolidated score would surface a subject the rules deliberately let pass.
     would_alert: bool = False
+
+    # What this evaluation would have been had the rules in `shadow_rules` been
+    # active. Null when nothing was in shadow. Mirrors decisions.shadow_* so a
+    # simulated answer and a stored one are read the same way.
+    shadow_rules: list[str] = Field(default_factory=list)
+    shadow_score: Decimal | None = None
+    shadow_action: str | None = None
+
     basis: str = BASIS
 
     @model_validator(mode="after")
@@ -164,14 +178,20 @@ def to_simulation(result, rules: dict, as_of: datetime) -> SimulatedDecision:
             rule_version_set=dict(result.rule_version_set),
             feature_version_set=dict(result.feature_version_set),
         ),
-        rules=[_trace(rs, rules[rs.rule_id], outcome) for rs in result.rule_scores],
+        rules=([_trace(rs, rules[rs.rule_id], outcome) for rs in result.rule_scores]
+               + [_trace(rs, rules[rs.rule_id], outcome, shadow=True)
+                  for rs in result.shadow_scores]),
         would_alert=bool(outcome.authorised_rules),
+        shadow_rules=list(result.shadow.rules) if result.shadow else [],
+        shadow_score=result.shadow.score if result.shadow else None,
+        shadow_action=result.shadow.action if result.shadow else None,
     )
 
 
-def _trace(rule_score, rule, outcome) -> RuleTrace:
+def _trace(rule_score, rule, outcome, shadow: bool = False) -> RuleTrace:
     evaluation = rule_score.evaluation
     return RuleTrace(
+        shadow=shadow,
         rule_id=rule.rule_id,
         name=rule.name,
         action=rule.action,
@@ -325,7 +345,12 @@ class RuleSimulation(BaseModel):
     rule_id: str
     rule_name: str
     mode: str                          # draft | replacement
-    status: str
+    status: str                        # what the draft ASKS to be published as
+    # ...and what it was evaluated as, which is always `active`. A shadow rule
+    # holds no authority and contributes no signal, so simulating one as
+    # authored would report that it does nothing — accurate, and useless.
+    evaluated_as: str = "active"
+    shadow_note: str = SHADOW_NOTE
     action: str
     review_threshold: Decimal
     prevent_threshold: Decimal | None = None
@@ -416,7 +441,8 @@ def to_rule_simulation(whatif, examples: int = 5,
 
     return RuleSimulation(
         rule_id=rule_id, rule_name=draft.name, mode=whatif.mode,
-        status=draft.status, action=draft.action,
+        status=draft.status, evaluated_as=whatif.evaluated_as,
+        action=draft.action,
         review_threshold=draft.review_threshold,
         prevent_threshold=draft.prevent_threshold,
         population=SampledPopulation(

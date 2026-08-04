@@ -23,10 +23,31 @@ _UNSET = object()
 # so Postgres already refuses to remove a rule that ever acted.
 RULE_STATUSES: tuple[str, ...] = ("active", "shadow", "inactive")
 
-# The statuses that reach the engine at all. `shadow` is loaded and — until
-# session 3 builds the gate — acts exactly like `active` (D2); it is loaded here
-# so that gate has something to gate.
+# The statuses that reach the engine at all. `shadow` is loaded on purpose: a
+# shadow rule is EVALUATED — resolved, read point-in-time, scored, and recorded
+# in the condition ledger — so that its precision is measurable before it is
+# promoted.
 EVALUATED_RULE_STATUSES: tuple[str, ...] = ("active", "shadow")
+
+# The statuses whose rules may ACT. This is D2's gate, and it is a tuple rather
+# than a comparison scattered through the engine for the reason every other
+# vocabulary here is one definition: `precedence`, the ledger, the consolidator
+# and `catalog.v1`'s published `takes_action` must agree about what shadow means,
+# or the wire says one thing and the customer experiences another.
+#
+# A shadow rule is excluded from consolidation and from precedence: it cannot
+# put a signal on the published bar, hold authority, carry a severity or
+# establish a veto. What it DOES write is on the decision — `shadow_score`,
+# `shadow_action`, `shadow_rules` (migration 0030) — and in the condition
+# ledger, flagged `is_shadow`.
+ACTING_RULE_STATUSES: tuple[str, ...] = ("active",)
+
+SHADOW = "shadow"
+
+
+def takes_action(status: str | None) -> bool:
+    """Whether a rule in this status may reach the customer at all."""
+    return (status or "active") in ACTING_RULE_STATUSES
 
 
 def _json_default(raw: Any) -> tuple[Any, bool]:

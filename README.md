@@ -49,7 +49,7 @@ python scripts/kpi_report.py                # the nine tiles
 python scripts/case_report.py --alert 5 --citations   # a filing draft, sourced
 
 psql "$GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   # 87 / 68 / 64 / 58 / 0
-pytest                                                    # 334 tests
+pytest                                                    # 369 tests
 python -m glassbox serve                                  # read API on :8000
 ```
 
@@ -109,6 +109,8 @@ db/migrations/  0001-0008  Week 1 schema, unchanged
                 0013       version stores, action executions, clusters
                 0014       bitemporal feature_values  (the one non-additive migration)
                 0023       alert routing, fold state, exposure, condition ledger
+                0029       who decided a case: analyst or script
+                0030       the shadow gate's columns, and what publishing IS
 db/seeds/       0009-0010  the catalog and the four rules
                 0015-0021  21 computable specs, 11 resolution edges, rule policy,
                            score bands, novelty baselines, driver filters
@@ -117,6 +119,8 @@ db/seeds/       0009-0010  the catalog and the four rules
                 0026-0028  the repriced condition, the calibrated bands, and the
                            refund-abuse features — all three are UPDATEs and
                            INSERTs applied by hand from a report's evidence
+                0031       the definitions that predate the publish step,
+                           backfilled through the same function it calls
 db/views/       v_alert_invariants.sql       sum(signals) == score
                 v_decision_routing.sql       the routing invariant 0023 could not CHECK
                 v_condition_performance.sql  §10: cost per unit of precision
@@ -145,10 +149,11 @@ src/glassbox/
               execute.py    issue what was authorised, once per case
               outcomes.py   settle challenges, disposition cases (synthetic)
               evaluation.py the order, which is the design
-  explain/    evidence.py   the six relations, and the Quoter every number passes
+  explain/    evidence.py   the eight relations, and the Quoter every number passes
               copilot.py    three chips, templated
               case_report.py the filing draft, which says it is one
   rules/      validate.py   what an authored rule must fail against
+              publish.py    definition -> version -> snapshot, or none of it
   contract/   models.py     alert.v1 — frozen, digest-pinned
               queue.py      queue.v1 — priority, with its factors published
               executions.py executions.v1 — what was done, and its synthetic flag
@@ -159,7 +164,8 @@ src/glassbox/
               simulation.py simulation.v1 — what the engine would say, unstored
               catalog.py    catalog.v1 — the control plane, and what each
                             condition has actually earned
-  api/        fourteen read endpoints, one write, two simulations
+  api/        fourteen read endpoints, six writes, two simulations
+              routes_rules.py  author, edit, promote, retire — admin only
               auth.py       two demo users; reads open, writes not
 ```
 
@@ -269,8 +275,13 @@ footnote.
 
 **The explanation surface is deterministic, and can only read one case.** The
 copilot and the case report are templating over `alert_signals`, `decisions`,
-`action_executions` and three more relations for the alert in view — a cursor
-hook in the test suite fails the build if anything else is queried. Every number
+`action_executions` and five more relations for the alert in view — a cursor
+hook in the test suite fails the build if anything else is queried. Two of the
+eight are the version stores, added in Week 5 so the report can say whether a
+recorded `rule_version_set` actually resolves instead of guessing in either
+direction; the lookup is keyed on ids the alert already carries, which is why it
+is a pointer being resolved rather than the boundary being widened for
+convenience. Every number
 in the output passes through a `Quoter` that records the table and primary key it
 came from, or the formula if it was derived, and a test extracts every numeric
 token and checks it traces back. Mitigators and applied vetoes are not optional:
@@ -279,7 +290,20 @@ without them. No language model is involved in any field of any payload, which i
 a design choice rather than a limitation — the explanation surface of a glass-box
 system should not itself be a black box.
 
-**Reads are open; the two surfaces that leave a mark are not.** An analyst marks
+**A rule is published, not saved.** `POST /rules` writes the definition,
+snapshots it into `rule_versions` with the actor who published it, and lands the
+rule in **shadow** — where the engine scores it on every applicable subject,
+records every condition it looked at (`decision_conditions.is_shadow`) and
+records the action it would have taken (`decisions.shadow_action`), and lets it
+alert nobody and challenge nobody. `POST /rules/{id}/promote` is what makes it
+act, and it is a separate call because it is a separate decision. The version
+counter moves only when the definition actually moved: a save that changed
+nothing is not a new version, because `decisions.rule_version_set` records the
+version an evaluation *read* and a counter that ticks on every keystroke makes
+that set meaningless. Deleting is retiring — the foreign keys refuse to remove a
+rule that ever acted, which is the audit trail defending itself.
+
+**Reads are open; the surfaces that leave a mark are not.** An analyst marks
 a case through `POST /alerts/{id}/outcome`, authenticated by a bearer token that
 resolves to one of two demo users (`src/glassbox/api/auth.py` — a static map, not
 authentication, and it says so). The actor comes from the principal and never
@@ -375,7 +399,7 @@ and it is worth saying so out loud.
 ## Tests
 
 ```bash
-pytest                       # 334 tests, ~125s including a full rebuild
+pytest                       # 369 tests, ~125s including a full rebuild
 pytest tests/test_degraded.py -v
 ```
 
@@ -413,6 +437,8 @@ a test that mutates rules or catalog rows cannot leak.
 | `test_catalog_api.py` | Week 5 — the control plane read, the measurement beside the price, and the condition that admits it has never been evaluated |
 | `test_rule_validation.py` | Week 5 — the ways to author a rule that does nothing, each a 422; and every shipped rule still validating clean |
 | `test_simulate_rule.py` | Week 5 — a candidate rule over history, the reprice diff, and the two control-plane tables that must not move |
+| `test_publish.py` | Week 5 — the counter that moves only when the definition does, the previous definition retrievable as it was, and the transitions that are refused |
+| `test_shadow.py` | Week 5 — a shadow rule contributes nothing and records everything, including the veto it is not allowed to cast |
 
 ---
 
@@ -447,11 +473,22 @@ Port 55432 rather than 5432 so a locally-installed PostgreSQL does not collide.
   subject sits near this line" and nothing stronger. A cutoff that encodes an
   appetite needs dispositions at volume, and §8's denominators here are single
   digits.
-- **The version numbers in a case report resolve to nothing.**
-  `rule_versions` and `feature_catalog_versions` are still empty, so a stored
-  `rule_version_set` names a version with no definition behind it. The report
-  prints the numbers *and* says they do not resolve, which turns a silent audit
-  gap into a stated one — but it is still a gap.
+- **One reprice in the project's history is unversioned, and it is the one that
+  moved a signed-off score.** Seed `0026` repriced `country_is_new_for_customer`
+  from +50 to +12 before a version counter was ever bumped, so T-021 version 1
+  names two definitions. Seed `0031` backfills the *current* definition at
+  version 1 rather than inventing a version 2 — a retroactive version would
+  leave every stored decision pointing at a v1 no snapshot exists for, which
+  breaks the thing it was meant to fix. The loss is recorded in `0026` and in
+  `HANDOFF.md` §W4.2, and it is the last change a version set cannot
+  distinguish.
+- **Editing a rule deletes the condition ledger behind its old conditions.**
+  `decision_conditions` references `rule_conditions` with `ON DELETE CASCADE`,
+  and an edit replaces conditions wholesale — so repricing a condition destroys
+  the firing history that found the misprice. The *definition* survives in
+  `rule_versions`; the per-firing evidence does not. Harmless on a dataset
+  rebuilt from scratch, and named in `rules/publish.py` rather than discovered
+  later (WEEK5-PLAN D8).
 - `ratio` is named by §3.1 but unused by any catalogued feature, so it is
   deliberately not implemented — a spec asking for it fails loudly at compile
   time rather than returning a number nobody defined.
@@ -478,21 +515,26 @@ Port 55432 rather than 5432 so a locally-installed PostgreSQL does not collide.
   labelled cohort was deliberately sized so most clusters fall below R-114's
   line. A cohort the rules caught entirely would make the tile read 0% and prove
   nothing.
+- **Nothing ships in shadow, so the shadow columns are NULL across the whole
+  population.** The gate is exercised by `test_shadow.py`, which shadows R-114
+  and watches `TXN-48291` go from 87 / `challenge` to 0 / `allow` with the
+  would-be answer moving into `decisions.shadow_action`. A consequence worth
+  knowing: `v_condition_performance` does not separate shadow firings from live
+  ones, which is invisible here and would dilute `mean_contribution` for a
+  condition measured across a promotion (WEEK5-PLAN D9).
 - **Still deferred:** the `sequence` source kind, which would delete the last
-  hand-seeded feature value; the batch/incremental consistency test; filling
-  `rule_versions` / `feature_catalog_versions`; and the scheduler — §15's
-  topology says "one service, one database, a scheduler" and `run_cycle.py` is
-  still run by hand, so §18's decision 6 (the async cycle period) stays open.
-  Admin write endpoints go with the console, which is out of scope.
+  hand-seeded feature value; the batch/incremental consistency test; and the
+  scheduler — §15's topology says "one service, one database, a scheduler" and
+  `run_cycle.py` is still run by hand, so §18's decision 6 (the async cycle
+  period) stays open. The console is out of scope; the admin write endpoints it
+  would bind to are built.
 - **Further defects are recorded in [WEEK5-PLAN.md](WEEK5-PLAN.md)**, none of
-  them owned by this list. Still open: **no version counter is ever bumped**, so
-  a stored `rule_version_set` cannot distinguish a rule from the same rule
-  repriced; and **shadow mode is inert**, so a rule authored `status='shadow'`
-  scores, alerts and issues preventive actions exactly like a live one —
-  `GET /rules` publishes `takes_action: true` for such a rule rather than
-  implying a guarantee that is not there. Closed in session 1: dispositions carry
-  provenance. Closed in session 2: an authored rule now has something to fail
-  against. That file is the plan for the rest.
+  them owned by this list. Closed in session 1: dispositions carry provenance.
+  In session 2: an authored rule has something to fail against. In session 3:
+  the version counter moves when a definition moves and the definition is kept
+  (**D1**), and a shadow rule is scored, recorded and allowed to act on nothing
+  (**D2**). Still open there: CI does not exist, so every enforcement mechanism
+  the project's claims rest on runs only when a human runs it.
 - **A rule what-if is bounded and says so.** `POST /simulate/rule` evaluates the
   most recent 2,000 subjects of the rule's own subject type by default, and
   publishes `subjects_available`, `subjects_evaluated`, `sample_cap` and

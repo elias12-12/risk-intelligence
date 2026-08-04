@@ -44,12 +44,13 @@ DECISION_COLUMNS = (
     "evaluation_trigger", "trigger_type", "trigger_id", "rule_version_set",
     "feature_version_set", "degraded_features", "action_source_rule", "vetoed_by",
     "prevent_threshold_met", "pit_bound_at", "replay_as_of", "alert_routing",
+    "shadow_score", "shadow_action", "shadow_rules",
 )
 
 CONDITION_COLUMNS = (
     "decision_id", "condition_id", "rule_id", "feature_key", "read_status", "fired",
     "rule_satisfied", "priced_points", "contributed", "entity_type", "entity_ids",
-    "feature_value", "value_as_of", "value_computed_at", "spec_version",
+    "feature_value", "value_as_of", "value_computed_at", "spec_version", "is_shadow",
 )
 
 # 15 columns x 800 rows = 12,000 bound parameters, against a protocol limit of
@@ -307,9 +308,15 @@ def _condition_rows(r) -> list[tuple]:
     fired AND its rule was satisfied, because scoring.score_rule gates the whole
     rule on satisfaction. Keeping the catalog price alongside it is the point —
     the gap between priced_points and contributed is what §10 is looking for.
+
+    A SHADOW rule's conditions are recorded too, flagged, contributing zero.
+    That is the whole of what shadow mode buys (0030): the same
+    `v_condition_performance` that prices a live condition measures a shadow one,
+    on the same population, before anything is done to a customer.
     """
     out = []
-    for rs in r.rule_scores:
+    for rs, shadow in ([(rs, False) for rs in r.rule_scores]
+                       + [(rs, True) for rs in r.shadow_scores]):
         satisfied = rs.evaluation.satisfied
         for co in rs.evaluation.evaluated:
             cond, read = co.condition, co.read
@@ -317,10 +324,10 @@ def _condition_rows(r) -> list[tuple]:
             out.append((
                 r.decision_id, cond.condition_id, cond.rule_id, cond.feature_key,
                 read.status, co.fired, satisfied, priced,
-                priced if (co.fired and satisfied) else Decimal(0),
+                priced if (co.fired and satisfied and not shadow) else Decimal(0),
                 read.entity_type, list(read.entity_ids),
                 json.dumps(jsonable(read.value), default=str),
-                read.as_of, read.computed_at, read.spec_version,
+                read.as_of, read.computed_at, read.spec_version, shadow,
             ))
     return out
 
@@ -368,6 +375,12 @@ def _decision_row(r) -> tuple:
         # 'no_authority' is already final for the ~9,916 decisions that no rule
         # had authority over, which is most of them.
         "raised" if r.outcome.authorised_rules else "no_authority",
+        # What the shadow rules would have made of this, and NULL when none
+        # applied. Never merged into score/action_taken above: a shadow rule that
+        # could move a published number would not be in shadow.
+        r.shadow.score if r.shadow else None,
+        r.shadow.action if r.shadow else None,
+        r.shadow.rules if r.shadow else None,
     )
 
 

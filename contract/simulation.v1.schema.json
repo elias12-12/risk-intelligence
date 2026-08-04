@@ -629,6 +629,11 @@
         "distribution": {
           "$ref": "#/$defs/ScoreDistribution"
         },
+        "evaluated_as": {
+          "default": "active",
+          "title": "Evaluated As",
+          "type": "string"
+        },
         "examples": {
           "items": {
             "$ref": "#/$defs/WorkedExample"
@@ -691,6 +696,11 @@
         },
         "rule_name": {
           "title": "Rule Name",
+          "type": "string"
+        },
+        "shadow_note": {
+          "default": "A candidate is evaluated as if ACTIVE, whatever status it asks for: the question a what-if answers is what the rule would DO. Publishing it lands it in shadow, where (migration 0030) it scores, records its conditions and records the action it would have taken — and takes none — until an admin promotes it.",
+          "title": "Shadow Note",
           "type": "string"
         },
         "status": {
@@ -996,6 +1006,11 @@
               ],
               "title": "Score"
             },
+            "shadow": {
+              "default": false,
+              "title": "Shadow",
+              "type": "boolean"
+            },
             "veto_established": {
               "anyOf": [
                 {
@@ -1230,6 +1245,41 @@
             }
           ],
           "title": "Score"
+        },
+        "shadow_action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shadow Action"
+        },
+        "shadow_rules": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Shadow Rules",
+          "type": "array"
+        },
+        "shadow_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shadow Score"
         },
         "signals": {
           "items": {

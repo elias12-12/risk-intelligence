@@ -56,23 +56,23 @@ def test_an_inactive_rule_is_still_listed(conn):
     assert "cannot be deleted" in (listed["S-077"].status_caveat or "")
 
 
-def test_a_shadow_rule_says_that_shadow_does_not_yet_mean_anything(conn):
-    """D2, published rather than buried.
+def test_a_shadow_rule_is_evaluated_and_does_not_act(conn):
+    """D2, closed in session 3 — and the two questions stay separate.
 
-    A rule authored `shadow` scores, alerts and issues preventive executions
-    exactly like an active one, because `Rule.status` is loaded and never read
-    again. Session 3 builds the gate; until it does, the surface says so instead
-    of implying a guarantee that is not there.
+    `evaluated` and `takes_action` were the same boolean while shadow was inert.
+    They are different questions now: the engine loads a shadow rule, resolves
+    it, reads its features and records every condition it looked at, and
+    precedence never sees it. This test used to assert `takes_action is True`
+    with a comment saying to flip it when the gate landed; the gate landed.
     """
     with conn.cursor() as cur:
         cur.execute("UPDATE rule_definitions SET status = 'shadow' WHERE rule_id = 'R-114'")
 
     shadowed = next(r for r in read_rules(conn) if r.rule_id == "R-114")
     assert shadowed.evaluated is True
-    assert shadowed.takes_action is True, (
-        "if this flips to False, the shadow gate has landed — update the caveat "
-        "and this test with it")
-    assert "never read again" in (shadowed.status_caveat or "")
+    assert shadowed.takes_action is False
+    caveat = shadowed.status_caveat or ""
+    assert "raises no alert" in caveat and "Promote it" in caveat
 
 
 def test_rule_detail_carries_the_measurement_beside_the_price(conn):
@@ -118,12 +118,33 @@ def test_a_condition_that_was_never_evaluated_says_so_rather_than_publishing_zer
     assert "absence of evidence" in (condition.performance_absent_because or "")
 
 
-def test_versions_do_not_resolve_yet_and_the_surface_admits_it(conn):
-    """`rule_versions` is empty for every shipped rule, so a stored
-    rule_version_set names a number with no definition behind it. Session 3 is
-    where this flips; until then the payload states the gap."""
-    assert fetch_value(conn, "SELECT count(*) AS n FROM rule_versions") == 0
-    detail = read_rule(conn, "R-114")
+def test_every_shipped_rule_resolves_its_current_version(conn):
+    """The other half of D1. `rule_versions` was empty through Week 4 and this
+    test asserted that it was; seed 0031 backfilled the four seeded definitions,
+    so a stored `rule_version_set` now names something retrievable."""
+    assert fetch_value(conn, "SELECT count(*) AS n FROM rule_versions") >= 4
+    for rule_id in ("R-114", "L-203", "S-077", "T-021"):
+        detail = read_rule(conn, rule_id)
+        assert detail.versions_resolve is True, rule_id
+        current = [v for v in detail.versions if v.version == detail.version]
+        assert len(current) == 1
+        assert current[0].published_by == "seed:0031_backfill"
+
+
+def test_a_rule_written_straight_into_the_table_does_not_resolve(conn):
+    """`versions_resolve` is a fact about the rule, not a claim about the build.
+
+    A rule inserted by hand — which is what every seed did before 0031, and what
+    a test fixture still does — has no published definition behind its version,
+    and the surface has to keep saying so or the field means nothing.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO rule_definitions (rule_id, name, subject_type, "
+            "execution_mode, action, review_threshold, created_by) "
+            "VALUES ('Z-998', 'Unpublished', 'transaction', 'inline_sync', "
+            "'alert', 50, 'test')")
+    detail = read_rule(conn, "Z-998")
     assert detail.versions == []
     assert detail.versions_resolve is False
 
