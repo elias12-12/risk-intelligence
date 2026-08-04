@@ -29,6 +29,10 @@ outcomes back in as a feature, prints the condition-performance report, the band
 calibration and the nine KPI tiles, exports the published contracts and runs the
 acceptance suite. Roughly three minutes cold.
 
+That builds the dataset. To see the system *react* to something rather than
+rebuild around it, `scripts/demo_burst.py` sends five card-not-present charges
+one at a time and the fifth is declined — see **A charge can be stopped** below.
+
 Step by step:
 
 ```bash
@@ -49,8 +53,17 @@ python scripts/kpi_report.py                # the nine tiles
 python scripts/case_report.py --alert 5 --citations   # a filing draft, sourced
 
 psql "$GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   # 87 / 68 / 64 / 58 / 0
-pytest                                                    # 393 tests
-python -m glassbox serve                                  # read API on :8000
+pytest                                                    # 443 tests
+python -m glassbox serve                                  # API on :8000, cycle every 30s
+```
+
+Then the part that is not a rebuild — charges the system has never seen,
+arriving one at a time:
+
+```bash
+python scripts/demo_burst.py                # five charges; the fifth is declined
+python scripts/demo_burst.py --http         # the same, through a running service
+python scripts/demo_burst.py --clean        # take it back out
 ```
 
 `verify_scores.sql` keeps its psql meta-commands and must be run with `psql`
@@ -111,6 +124,8 @@ db/migrations/  0001-0008  Week 1 schema, unchanged
                 0023       alert routing, fold state, exposure, condition ledger
                 0029       who decided a case: analyst or script
                 0030       the shadow gate's columns, and what publishing IS
+                0032       provenance on every relation a row can now arrive in,
+                           and the watermark that makes a cycle incremental
 db/seeds/       0009-0010  the catalog and the four rules
                 0015-0021  21 computable specs, 11 resolution edges, rule policy,
                            score bands, novelty baselines, driver filters
@@ -155,6 +170,13 @@ src/glassbox/
               case_report.py the filing draft, which says it is one
   rules/      validate.py   what an authored rule must fail against
               publish.py    definition -> version -> snapshot, or none of it
+  ingest/     records.py    what a row must satisfy before it is written down —
+                            shared by both doors AND by the what-if
+              authorize.py  decide, then write the decision INTO the row
+              arrivals.py   settled transactions, events, link edges
+              watermark.py  how far the cycle has consumed, in event time
+              cycle.py      graph -> features -> lanes, over what arrived
+  scheduler.py              the third of "one service, one database, a scheduler"
   contract/   models.py     alert.v1 — frozen, digest-pinned
               queue.py      queue.v1 — priority, with its factors published
               executions.py executions.v1 — what was done, and its synthetic flag
@@ -166,13 +188,16 @@ src/glassbox/
                             a stored subject, a candidate rule, a charge nobody made
               catalog.py    catalog.v1 — the control plane, and what each
                             condition has actually earned
-  api/        fourteen read endpoints, six writes, three simulations
+              ingest.py     ingest.v1 — the two doors, and what a cycle did
+  api/        fifteen read endpoints, ten writes, three simulations
               routes_rules.py  author, edit, promote, retire — admin only
+              routes_ingest.py /authorize, /ingest/*, /cycle — admin only
               auth.py       two demo users; reads open, writes not
 ```
 
 The pipeline order, in one line each:
 
+0. **Arrive** — a charge asks to be authorized, or settled rows are reported.
 1. **Graph** — clusters and members, from `entity_links`.
 2. **Plan** — one `EvaluationRequest` per (subject, lane), carrying its trigger.
 3. **Features** — out of band, into `feature_values`, stamped `as_of` + `computed_at`.
@@ -187,6 +212,10 @@ The pipeline order, in one line each:
 12. **Route** — fold onto an open case, restate it, suppress under an investigation, or raise.
 13. **Issue** — preventive actions on a raised case only; notifications also on a restatement.
 14. **Settle** — outcomes back onto the executions, dispositions onto the cases, events into the log.
+
+`/authorize` runs 0 and 3–13 synchronously for one charge and commits. The
+background cycle runs 1–13 on an interval, over whatever arrived since its
+watermark. Step 14 is still a script.
 
 ---
 
@@ -360,6 +389,78 @@ alert it predicts cannot disagree. With `replay_as_of` set to a stored decision'
 we say today?"*, which is the audit question the bitemporal feature store exists
 to make answerable.
 
+**A charge can be stopped, and that is new.** Every week before this one
+detected fraud correctly and could prevent none of it: transactions arrived
+already stamped `auth_result='approved'`, so a `challenge` decision was a note
+attached to money that had already moved. §7.3 argues that prevention needs a
+higher threshold *because a wrong block costs a customer*, and nothing here
+could cost a customer anything. `POST /authorize` closes that: the row is
+inserted as presumed-approved (it has to be — `card_cnp_count` counts approved
+CNP charges, and a charge that does not count itself is the fifth of five
+reading four), the features it drives are recomputed at its own instant, the
+inline lane runs, and **precedence decides the `auth_result` before the
+transaction commits**. Which actions stop a charge is read off
+`ref_action.is_preventive`, not a list in Python. A `challenge` commits as
+`declined` with `decline_reason='step_up_required'`, because a step-up nobody
+has answered has not been passed — and that is how 3DS behaves. Raw capture is
+append-only and the write-back happens inside the same uncommitted transaction
+as the insert, so there is no moment at which a blocked charge existed in this
+database as an approved one. `scripts/demo_burst.py` is the whole thing in one
+screen: five charges twenty seconds apart, four approved, the fifth 87 and
+declined, with a step-up issued and every point on the bar.
+
+**The decision invalidates the evidence it was made on, and both survive.** A
+charge declined after being counted as approved is no longer an approved CNP
+charge, so the scoped feature pass runs a second time after the write-back.
+`feature_values` is append-only and bitemporal, so the recomputation is an
+INSERT with the same `as_of` and a later `computed_at`: the decision keeps the
+evidence it actually saw, the store ends up describing what really happened, and
+§4's replay reads whichever of the two it asks for. This is the first place in
+the project where bitemporality earns its keep on a write path rather than in an
+argument.
+
+**Something is actually running.** §15's topology is "one service, one database,
+**a scheduler**", and for four weeks the last third of that was a promise —
+`run_cycle.py` was run by hand, which is why §18's decision 6 stayed open.
+`glassbox serve` now starts a daemon thread that turns the engine over every
+`GLASSBOX_CYCLE_SECONDS` (default 30, `0` disables it, and the test suite sets
+`0` because a thread committing into a rolled-back test transaction is the least
+debuggable failure this project could have). §2.2's 15 minutes was a production
+number chosen against graph-rebuild cost at real volume; here the whole cycle is
+under a second, so fifteen minutes would buy nothing and cost the only thing a
+prototype needs to show. **A tick evaluates what arrived, not the population** —
+`affected_subjects` narrows to the transactions, the entities behind them and
+the clusters those entities belong to, because `plan_evaluations` otherwise
+re-scores 9,844 transactions to notice one charge. The narrowing is by *subject*
+and never by rule or feature, so a re-evaluated subject is still evaluated
+against its whole history and an incremental tick and a full pass give the same
+answer. On the shipped fixtures a tick that finds one new charge takes ~90 ms
+against ~20 s for a full pass, and a tick with nothing to do takes 7.
+
+**Two doors, and they mean opposite things.** `/authorize` asks for a decision;
+`/ingest/transactions` reports one somebody else already made. The models carry
+the distinction rather than a docstring: an `AuthorizationRequest` has no
+`auth_result` and no `decline_reason` because the engine sets them, and a
+`TransactionRecord` has both plus `synthetic_label` because planted demo data
+should be labelled or it is invisible to every precision number in the system.
+They are separate endpoints rather than one with a `decide=true` flag, which
+would be one typo away from approving a charge the engine was never asked about.
+Events and links have their own doors because two of the four rules cannot be
+reached without them: L-203 discovers a ring from `entity_links` and no quantity
+of ingested transfers will produce one, and S-077 reads a password reset out of
+`events`.
+
+**A device is observed; an account is opened.** An unrecognised `device_id` is
+registered at the instant it is first presented — by all three writers, through
+one helper, between validation and the insert — while an unknown `card_id` is
+refused. That is not a convenience: `device_first_seen_min` is measured from
+exactly that instant and is 21 of R-114's 87 points, so refusing an unseen
+device would mean the only demonstrable "new device" is one the generator
+planted. A link to an account nobody opened *is* refused, and nothing else would
+have caught it — `entity_links.to_id` is polymorphic with the type in a
+neighbouring column, so there is no foreign key, and a phantom edge builds a
+cluster out of nothing whose ring looks exactly like a real one.
+
 **A charge that never happened can be scored, and the feature layer moves with
 it.** `POST /simulate/transaction` inserts a fabricated row, runs a feature pass
 scoped to the instant it claims to have occurred at, evaluates it, and rolls all
@@ -459,6 +560,9 @@ a test that mutates rules or catalog rows cannot leak.
 | `test_simulate_rule.py` | Week 5 — a candidate rule over history, the reprice diff, and the two control-plane tables that must not move |
 | `test_publish.py` | Week 5 — the counter that moves only when the definition does, the previous definition retrievable as it was, and the transitions that are refused |
 | `test_simulate_transaction.py` | Week 5 — a charge that never happened, the scoped feature pass watched writing and watched being gone, and the ground truth that cannot be fabricated |
+| `test_authorize.py` | Week 5 — the burst that is stopped, the row that commits as `declined`, and the two answers the bitemporal store keeps |
+| `test_ingest.py` | Week 5 — three doors, retries that are not errors, and the phantom edge no foreign key would catch |
+| `test_cycle.py` | Week 5 — a tick that reacts, a tick that costs nothing, and the narrowing that makes an interval possible |
 | `test_shadow.py` | Week 5 — a shadow rule contributes nothing and records everything, including the veto it is not allowed to cast |
 
 ---
@@ -470,8 +574,16 @@ a test that mutates rules or catalog rows cannot leak.
 | `GLASSBOX_DSN` | `postgresql://glassbox:glassbox@localhost:55432/glassbox` | Dev database |
 | `GLASSBOX_TEST_DSN` | …`/glassbox_test` | Dropped and recreated by the test session |
 | `GLASSBOX_NOW` | `2026-01-15T15:00:00+00:00` | The fixtures' reference instant |
+| `GLASSBOX_CYCLE_SECONDS` | `30` | Background cycle interval. `0` disables it — which is what the test suite sets |
+| `GLASSBOX_API_TOKENS` | two demo users | `token:actor:role,…` |
 
 Port 55432 rather than 5432 so a locally-installed PostgreSQL does not collide.
+
+An ingested or authorized charge is dated at `GLASSBOX_NOW` unless it says
+otherwise, and that matters more than it looks: every window feature (90s, 24h,
+30d) is measured against history pinned to 2026-01-15, so a charge dated at wall
+clock would see a card with no past at all. The cycle's watermark is event time
+for the same reason.
 
 ---
 
@@ -543,20 +655,53 @@ Port 55432 rather than 5432 so a locally-installed PostgreSQL does not collide.
   knowing: `v_condition_performance` does not separate shadow firings from live
   ones, which is invisible here and would dilute `mean_contribution` for a
   condition measured across a promotion (WEEK5-PLAN D9).
+- **A stopped charge has no second act.** `/authorize` declines a challenged
+  charge with `step_up_required`, which is what 3DS does — and in a real system
+  the customer authenticates and retries, and the retry is a new authorization
+  that sees the challenge in the card's history. Nothing here answers a step-up:
+  `resolve_actions.py` still settles them against `synthetic_label`, and there
+  is no endpoint for "the customer passed". So the demo shows a charge being
+  stopped and never shows one being released.
+- **Dimension rows cannot be ingested, on purpose, and it has a cost.** A device
+  is observed and so is created; a card, account, customer or merchant is
+  *opened*, which is an onboarding act this system does not model, so an unknown
+  one is refused. The consequence for a live demo is specific: a mule ring needs
+  four accounts, and a genuinely new ring cannot be ingested — the ring demo has
+  to reuse existing accounts, which `test_cycle.py` does.
+- **Ingested events are not idempotent.** `transactions` dedupe on `txn_id` and
+  `entity_links` on what the edge means; `events` have neither a primary key
+  worth using nor a natural one, so re-sending a batch appends it again. The
+  reducer that reads them (`age_minutes_latest`) is insensitive to a repeat at
+  the same instant, and inventing a key to make the receipt tidier would be
+  inventing a fact — so the receipt publishes `idempotent: false` instead.
+- **The cycle is at-least-once.** A tick that dies advances no watermark and the
+  next one re-reads the same window. That is safe rather than lucky — the
+  feature runner is append-only and §9's folding means a re-evaluated subject
+  produces the same alert count — but it does mean a tick can repeat work, and
+  exactly-once here would be machinery bought for nothing.
+- **The inline lane's 50 ms p99 is still a design target.** `/authorize`
+  publishes `latency_ms` and it is honest about what it includes: on the shipped
+  fixtures an approving charge is ~50 ms and one that raises a case and issues a
+  step-up is ~200 ms, on a laptop, against a local Postgres, with the scoped
+  feature pass inside the measurement. That is a number you can now argue with,
+  which is more than it was, and it is not a throughput claim.
 - **Still deferred:** the `sequence` source kind, which would delete the last
-  hand-seeded feature value; the batch/incremental consistency test; and the
-  scheduler — §15's topology says "one service, one database, a scheduler" and
-  `run_cycle.py` is still run by hand, so §18's decision 6 (the async cycle
-  period) stays open. The console is out of scope; the admin write endpoints it
-  would bind to are built.
+  hand-seeded feature value; and the batch/incremental consistency test. The
+  console is out of scope; the admin write endpoints it would bind to are built.
+  §15's "one service, one database, a scheduler" is now all three, and §18's
+  decision 6 is answered at 30 seconds — a demo number, not a production one.
 - **Further defects are recorded in [WEEK5-PLAN.md](WEEK5-PLAN.md)**, none of
   them owned by this list. Closed in session 1: dispositions carry provenance.
   In session 2: an authored rule has something to fail against. In session 3:
   the version counter moves when a definition moves and the definition is kept
   (**D1**), and a shadow rule is scored, recorded and allowed to act on nothing
   (**D2**). Session 4 closed no defect — it is the third simulation — and
-  answered **O4**. Still open there: CI does not exist, so every enforcement
-  mechanism the project's claims rest on runs only when a human runs it.
+  answered **O4**. The ingest work that followed found and fixed **D10**: the
+  cluster builder allocated ids by candidate index, so the second device-fanout
+  cluster took `RING-1187` from the first. Unreachable for four weeks because the
+  fixtures build exactly one cluster, and reachable the moment links can arrive
+  over HTTP. Still open there: CI does not exist, so every enforcement mechanism
+  the project's claims rest on runs only when a human runs it.
 - **A hypothetical charge is scored as a transaction and nothing else.**
   `POST /simulate/transaction` evaluates the fabricated row in one lane, as a
   `transaction` subject. The card, account, customer and merchant it references

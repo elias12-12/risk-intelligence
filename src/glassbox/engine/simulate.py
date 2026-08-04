@@ -40,15 +40,16 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any, Iterator, Mapping, Sequence
-from uuid import uuid4
 
 import psycopg
 
 from ..config import reference_now
 from ..contract.catalog import RuleDraft
-from ..db import fetch_all, fetch_one, fetch_value
-from ..features.predicate import check_column, load_allowlist
+from ..db import fetch_all, fetch_one
+from ..features.predicate import load_allowlist
 from ..features.runner import DriverSplit, IncrementalRunner
+from ..ingest import records
+from ..ingest.records import RecordRefused
 from ..rules.publish import apply_definition
 from ..types import EvaluationRequest
 from .evaluation import (
@@ -76,19 +77,12 @@ class SubjectNotEvaluable(LookupError):
     engine, an answer about the request."""
 
 
-class FabricationRefused(ValueError):
-    """A hypothetical row the engine will not pretend to have received.
-
-    Distinct from `SimulationUnsafe`, which is about the SCOPE, and from
-    `RuleInvalid`, which is about a draft's content. These are refusals about
-    what may be invented: a reference to an entity that does not exist, an id
-    that collides with a real transaction, or a column no caller is allowed to
-    fabricate. Every problem is collected, not the first one.
-    """
-
-    def __init__(self, reasons: Sequence[str]):
-        self.reasons = list(reasons)
-        super().__init__("; ".join(self.reasons))
+# One refusal type for "a row this system will not write down", whether the
+# caller meant to keep it or not. This module owned its own for one session and
+# the messages were already converging; two exception classes for one meaning is
+# how a route ends up catching the wrong one. The name is kept because it reads
+# correctly at the fabrication site.
+FabricationRefused = RecordRefused
 
 
 @contextmanager
@@ -285,18 +279,6 @@ def _labels(conn: psycopg.Connection,
 # those two being the same relation is the whole reason the pass is scoped.
 ARRIVAL_RELATION = "transactions"
 
-# subject column -> (dimension table, its key). The schema already has foreign
-# keys on all five (0003), so Postgres would refuse a bad reference anyway — but
-# it would refuse it by aborting the transaction mid-scope, which reaches a
-# caller as an opaque IntegrityError rather than as "there is no card CARD-XYZ".
-_REFERENCES: dict[str, tuple[str, str]] = {
-    "card_id": ("cards", "card_id"),
-    "account_id": ("accounts", "account_id"),
-    "customer_id": ("customers", "customer_id"),
-    "merchant_id": ("merchants", "merchant_id"),
-    "device_id": ("devices", "device_id"),
-}
-
 # Columns no caller may fabricate, whatever the request model happens to expose.
 #
 # `synthetic_label` is the one that matters: it is PLANTED GROUND TRUTH, the
@@ -306,29 +288,18 @@ _REFERENCES: dict[str, tuple[str, str]] = {
 # from the request model is the same layered enforcement §1 uses for the sum
 # invariant — and it is what makes "nothing labels it" an enforced limit rather
 # than a described one.
-UNFABRICABLE_COLUMNS: frozenset[str] = frozenset({"synthetic_label", "ingested_at"})
+#
+# Note what is NOT here: `auth_result`. A fabricated charge may say it was
+# declined, because `merchant_decline_burst` counts declines and a what-if on a
+# card-testing rule needs to be able to describe one. The authorization path
+# forbids it for the opposite reason — there the engine chooses it.
+UNFABRICABLE_COLUMNS: frozenset[str] = frozenset({"synthetic_label", "ingested_at",
+                                                  "source"})
 
 # The scoped pass recomputes at exactly the fabricated instant, so its watermark
 # has to sit just below it: `since` is an exclusive lower bound, and a watermark
 # equal to occurred_at would exclude the very row the pass exists to see.
 _ARRIVAL_EPSILON = timedelta(microseconds=1)
-
-# What an unstated column means. `currency` is NOT NULL in 0003, so a charge
-# with no currency is not insertable at all; the other three are the vocabulary
-# an ordinary approved purchase carries, and they are the same defaults
-# `generate_synthetic.mk_txn` applies to every row it writes. Defined here
-# rather than on the request model so there is ONE answer to "what does an
-# unstated column mean", whether the caller is HTTP or a test with a bare dict.
-ARRIVAL_DEFAULTS: dict[str, Any] = {
-    "currency": "USD", "direction": "debit", "txn_type": "purchase",
-    "auth_result": "approved",
-}
-
-# NOT NULL on `transactions` with no sensible default. Refused before the scope
-# opens rather than left to the INSERT: a NOT NULL violation aborts mid-sandbox
-# and reaches the caller as a database error about a column, not as an answer
-# about their request.
-REQUIRED_COLUMNS: tuple[str, ...] = ("amount", "occurred_at")
 
 FABRICATION_BASIS = (
     "A transaction that never happened, inserted inside a transaction that is "
@@ -394,6 +365,12 @@ def simulate_transaction(conn: psycopg.Connection, row: Mapping[str, Any],
     occurred_at, txn_id = fabricated["occurred_at"], fabricated["txn_id"]
 
     with simulation_scope(conn):
+        # A fabricated charge may present a fingerprint nobody has seen, and
+        # that is the most interesting what-if there is: `device_first_seen_min`
+        # is 21 of R-114's 87 points, so "what if this came from a brand-new
+        # device" is exactly the question an analyst asks. The device is created
+        # inside the scope like everything else here, and vanishes with it.
+        records.ensure_device(conn, ARRIVAL_RELATION, fabricated, "authorized")
         insert_arrival(conn, fabricated, allowlist)
         recomputed, split, novelty = scoped_feature_pass(conn, occurred_at)
 
@@ -421,84 +398,27 @@ def prepare(conn: psycopg.Connection, row: Mapping[str, Any],
             as_of: datetime | None = None) -> dict[str, Any]:
     """Validate a fabricated row and fill in what it did not say.
 
-    Runs OUTSIDE the scope, on purpose: a refusal should reach the caller as an
-    answer about their request rather than as a rolled-back attempt, and a
-    reference check that ran inside the sandbox would be indistinguishable from
-    the FK doing it a moment later.
+    A thin call onto `ingest.records.prepare`, and the thinness is the point:
+    the row a caller TESTS here and the row a caller COMMITS through
+    `/authorize` or `/ingest/transactions` pass through the same gate. A second,
+    laxer gate on the simulation side would make the what-if worthless in the
+    one direction that matters — it would report a verdict on a charge the live
+    path would have refused outright.
+
+    Only two things differ, and both are about what a HYPOTHETICAL row may say:
+    the forbidden set (`synthetic_label`, because a fabricated charge may not
+    label itself) and the id prefix, which is `SIM-` so a fabricated id reads as
+    fabricated wherever it is quoted back.
     """
-    supplied = {k: v for k, v in row.items() if v is not None}
-    reasons: list[str] = []
-
-    for key in sorted(set(supplied) & UNFABRICABLE_COLUMNS):
-        reasons.append(
-            f"{key!r} cannot be fabricated: it is a property of a row the system "
-            f"actually received, and inventing it would let a hypothetical charge "
-            f"answer a question it is supposed to be asked")
-
-    for key in sorted(supplied):
-        if key in UNFABRICABLE_COLUMNS:
-            continue
-        try:
-            check_column(ARRIVAL_RELATION, key, allowlist)
-        except Exception as exc:                                  # noqa: BLE001
-            reasons.append(str(exc))
-
-    prepared = {k: v for k, v in supplied.items() if k not in UNFABRICABLE_COLUMNS}
-    for column, value in ARRIVAL_DEFAULTS.items():
-        prepared.setdefault(column, value)
-    prepared.setdefault("occurred_at", as_of or reference_now())
-    # An obviously fabricated id, because the row exists for the length of one
-    # rolled-back transaction and will be quoted back in an explanation.
-    prepared.setdefault("txn_id", f"SIM-{uuid4().hex[:12].upper()}")
-    # The same normalisation the generator makes: a charge in the base currency
-    # has amount_base = amount, and several reducers (zscore_of_self,
-    # pass_through_ratio) read amount_base and nothing else, so leaving it null
-    # would degrade T-021's mitigator for a reason the caller never chose.
-    if prepared.get("amount_base") is None and prepared.get("amount") is not None:
-        prepared["amount_base"] = prepared["amount"]
-
-    for column in REQUIRED_COLUMNS:
-        if prepared.get(column) is None:
-            reasons.append(
-                f"{column} is required: it is NOT NULL on `transactions`, and a "
-                f"charge with no {column} is not a charge the system could have "
-                f"received")
-
-    if fetch_value(conn, "SELECT count(*) AS n FROM transactions WHERE txn_id = %s",
-                   (prepared["txn_id"],)):
-        reasons.append(
-            f"txn_id {prepared['txn_id']!r} is a transaction that really "
-            f"happened. A fabricated row may not borrow a real id: the two would "
-            f"be indistinguishable in every feature the pass recomputes")
-
-    for column, (relation, key_column) in _REFERENCES.items():
-        value = prepared.get(column)
-        if value is None:
-            continue
-        if not fetch_value(conn, f'SELECT count(*) AS n FROM {relation} '
-                                 f'WHERE "{key_column}" = %s', (value,)):
-            reasons.append(
-                f"{column}={value!r} is not a {relation[:-1]} this system knows. "
-                f"A hypothetical charge is made up; the entities it touches are "
-                f"not")
-
-    if reasons:
-        raise FabricationRefused(reasons)
-    return prepared
+    return records.prepare(conn, ARRIVAL_RELATION, row, allowlist,
+                           forbidden=UNFABRICABLE_COLUMNS, id_prefix="SIM",
+                           as_of=as_of)
 
 
 def insert_arrival(conn: psycopg.Connection, row: Mapping[str, Any],
-                    allowlist: dict[str, frozenset[str]]) -> None:
-    """The one INSERT. Column names come from the allow-list `predicate.py`
-    builds from `information_schema`; every value is bound."""
-    columns = [check_column(ARRIVAL_RELATION, k, allowlist) for k in sorted(row)]
-    placeholders = ", ".join(["%s"] * len(columns))
-    names = ", ".join(f'"{c}"' for c in columns)
-    with conn.cursor() as cur:
-        cur.execute(
-            f"INSERT INTO {ARRIVAL_RELATION} ({names}) VALUES ({placeholders})",
-            [row[c] for c in columns],
-        )
+                   allowlist: dict[str, frozenset[str]]) -> None:
+    """The one INSERT, shared with the two paths that mean to keep it."""
+    records.insert_row(conn, ARRIVAL_RELATION, row, allowlist)
 
 
 def scoped_feature_pass(conn: psycopg.Connection, occurred_at: datetime

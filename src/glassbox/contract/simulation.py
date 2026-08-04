@@ -31,14 +31,15 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..engine.simulate import (
-    ARRIVAL_DEFAULTS,
     DEFAULT_SAMPLE_CAP,
     FABRICATION_BASIS,
     SAMPLING_BASIS,
     SHADOW_NOTE,
 )
+from ..ingest.records import TRANSACTION_DEFAULTS
 from ..types import jsonable
 from .catalog import RuleDraft
+from .ingest import TransactionFields
 from .models import Action, ContractViolation, Evidence, Signal, Subject
 
 STRICT = ConfigDict(extra="forbid", frozen=True)
@@ -731,60 +732,36 @@ def jsonable_row(row: dict) -> dict[str, Any]:
     return out
 
 
-class TransactionDraft(BaseModel):
-    """A charge to invent. The writable subset of `transactions`, closed.
+class TransactionDraft(TransactionFields):
+    """A charge to invent.
 
-    Every reference is to an entity that must ALREADY EXIST — `transactions` has
-    foreign keys to cards, accounts, customers, merchants and devices (0003), and
-    the engine checks them before the sandbox opens so an unknown card is an
-    answer rather than an IntegrityError. The console picks a real card and makes
-    up the charge.
+    The field list is `TransactionFields`, shared verbatim with the two doors
+    that actually keep a row (`contract/ingest.py`). That sharing is the point:
+    a what-if whose accepted shape differed from the live path's would answer a
+    question nobody can act on — it would report a verdict on a charge
+    `/authorize` refuses to receive, or refuse one it would have taken.
 
-    `synthetic_label` is deliberately absent and is refused by the engine even if
-    a caller reaches it another way: it is planted ground truth.
+    Two additions, and they are what a HYPOTHETICAL charge may say that an
+    authorization request may not: `auth_result` and `decline_reason`. A
+    fabricated row is allowed to describe a decline, because
+    `merchant_decline_burst` counts declines and a what-if on a card-testing
+    rule has to be able to express one. `/authorize` forbids exactly these two
+    for the opposite reason — there the engine chooses them.
+
+    `synthetic_label` is absent here and refused by the engine even if a caller
+    reaches it another way: it is planted ground truth, and a fabricated charge
+    that labelled itself would answer the question it was asked. Ingested rows
+    MAY carry one, which is `contract/ingest.TransactionRecord`.
 
     An unstated `currency`, `direction`, `txn_type` or `auth_result` takes the
-    value in `engine.simulate.ARRIVAL_DEFAULTS`, which is the same default
+    value in `ingest.records.TRANSACTION_DEFAULTS` — the same default
     `generate_synthetic.mk_txn` applies to every row it writes. `amount_base`
     falls back to `amount`, and `txn_id` is generated as `SIM-…` when unstated.
     """
     model_config = ConfigDict(extra="forbid")
 
-    txn_id: str | None = None
-    occurred_at: datetime | None = None
-    amount: Decimal
-    currency: str | None = None
-    amount_base: Decimal | None = None
-    direction: str | None = None
-    txn_type: str | None = None
-
-    card_id: str | None = None
-    account_id: str | None = None
-    customer_id: str | None = None
-    merchant_id: str | None = None
-    device_id: str | None = None
-
-    mcc: str | None = None
-    channel: str | None = None
-    entry_mode: str | None = None
     auth_result: str | None = None
     decline_reason: str | None = None
-
-    txn_country: str | None = None
-    txn_lat: Decimal | None = None
-    txn_lon: Decimal | None = None
-    ip_address: str | None = None
-
-    payee_id: str | None = None
-    counterparty: str | None = None
-    billing_country: str | None = None
-    shipping_country: str | None = None
-
-    def columns(self) -> dict[str, Any]:
-        """The stated columns only. An omitted field is not the same as a null
-        one — `prepare` fills the omissions, and a column explicitly set to null
-        would be indistinguishable from an omission if this returned both."""
-        return {k: v for k, v in self.model_dump().items() if v is not None}
 
 
 class TransactionSimulationRequest(BaseModel):
@@ -795,7 +772,7 @@ class TransactionSimulationRequest(BaseModel):
     lane: Literal["inline_sync", "async"] = "inline_sync"
 
 
-assert set(ARRIVAL_DEFAULTS) <= set(TransactionDraft.model_fields), (
+assert set(TRANSACTION_DEFAULTS) <= set(TransactionDraft.model_fields), (
     "a default exists for a column the draft cannot express")
 
 

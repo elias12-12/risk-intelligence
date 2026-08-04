@@ -58,12 +58,20 @@ def build(dsn: str, fixtures: bool = True, features: bool = True,
         from glassbox.db import connect
         from glassbox.features.runner import IncrementalRunner
         from glassbox.graph.builder import build as build_graph
+        from glassbox.ingest import watermark
 
         with connect(dsn) as conn:
             build_graph(conn)
             conn.commit()
             runner = IncrementalRunner(conn)
             total = sum(r.rows_written for r in runner.run_population(config.reference_now()))
+            # The two stages this function actually ran, marked as consumed up
+            # to the newest event on record. The LANES are deliberately left
+            # unset: nothing here evaluated anything, so a watermark claiming
+            # otherwise would make the first cycle skip the whole population.
+            frontier = watermark.frontier(conn)
+            watermark.advance(conn, watermark.GRAPH, frontier)
+            watermark.advance(conn, watermark.FEATURES, frontier)
             conn.commit()
         if verbose:
             print(f"  {total} feature values")

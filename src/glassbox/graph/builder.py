@@ -38,22 +38,43 @@ class BuiltCluster:
     created: bool
 
 
-def _stable_id(seq: int, existing: dict[str, str], natural_key: str) -> str:
-    """RING-1187 is a signed-off id in Week 1's demo, so the first device-fanout
-    cluster keeps it. Everything after is allocated in sequence."""
+SIGNED_OFF = {"device_fanout:DEV-F90D2": "RING-1187"}
+
+
+def _stable_id(taken: set[str], existing: dict[str, str], natural_key: str) -> str:
+    """The id a cluster keeps for life.
+
+    Three rules, in order: a cluster that already exists keeps the id it has;
+    `DEV-F90D2` gets `RING-1187`, which is a signed-off id in Week 1's demo and
+    appears in `fixtures/expected_scores.json`; anything else takes the lowest
+    free number.
+
+    **The free-number search is a fix, not a flourish.** This used to be
+    `RING-{1187 + seq}` where `seq` was the candidate's index — and candidates
+    are ordered by device id, so the moment a second device-fanout cluster
+    existed with an id sorting before `DEV-F90D2`, the new cluster was allocated
+    `RING-1187` and collided with the ring. Unreachable for four weeks because
+    the fixtures build exactly one cluster; reachable the moment links can
+    arrive over HTTP (WEEK5-PLAN D10).
+    """
     if natural_key in existing:
         return existing[natural_key]
-    if natural_key == "device_fanout:DEV-F90D2":
-        return "RING-1187"
-    return f"RING-{1187 + seq}"
+    preferred = SIGNED_OFF.get(natural_key)
+    if preferred and preferred not in taken:
+        return preferred
+    n = 1187
+    while f"RING-{n}" in taken:
+        n += 1
+    return f"RING-{n}"
 
 
 def build(conn: psycopg.Connection) -> list[BuiltCluster]:
     """Find device-fanout clusters and (re)write clusters + cluster_members."""
-    existing = {
-        r["natural_key"]: r["cluster_id"]
-        for r in fetch_all(conn, "SELECT natural_key, cluster_id FROM clusters")
-    }
+    rows = fetch_all(conn, "SELECT natural_key, cluster_id FROM clusters")
+    existing = {r["natural_key"]: r["cluster_id"] for r in rows}
+    # Every id already spoken for, grown as this build allocates more, so two
+    # new clusters in one pass cannot be handed the same number either.
+    taken = {r["cluster_id"] for r in rows}
 
     candidates = fetch_all(
         conn,
@@ -74,9 +95,10 @@ def build(conn: psycopg.Connection) -> list[BuiltCluster]:
     )
 
     built: list[BuiltCluster] = []
-    for seq, row in enumerate(candidates):
+    for row in candidates:
         natural_key = f"device_fanout:{row['device_id']}"
-        cluster_id = _stable_id(seq, existing, natural_key)
+        cluster_id = _stable_id(taken, existing, natural_key)
+        taken.add(cluster_id)
         created = natural_key not in existing
 
         with conn.cursor() as cur:

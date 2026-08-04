@@ -13,6 +13,7 @@ against a second, parallel set of them.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -24,6 +25,14 @@ from psycopg.rows import dict_row
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "scripts"))
+
+# THE BACKGROUND CYCLE IS OFF FOR THE WHOLE SUITE, and this is not a preference.
+# Every test below runs inside a transaction that is rolled back at teardown; a
+# scheduler thread committing its own cycle into the middle of that would be the
+# least debuggable failure this project could have — non-deterministic, invisible
+# in the test body, and dependent on how long the assertion took. Set before any
+# `glassbox.api.app` import so the lifespan hook never starts one.
+os.environ["GLASSBOX_CYCLE_SECONDS"] = "0"
 
 from glassbox import config                                      # noqa: E402
 from glassbox.engine.evaluation import EngineContext, run_lane   # noqa: E402

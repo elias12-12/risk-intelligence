@@ -55,6 +55,10 @@ WRITABLE = (
     "transactions", "feature_values", "decisions", "alerts", "alert_signals",
     "alert_subjects", "decision_conditions", "action_executions", "case_outcomes",
     "rule_definitions", "rule_conditions",
+    # `devices` is here because a fabricated charge may present a fingerprint
+    # nobody has seen, and the sandbox creates it — which is the right answer
+    # and would be a leak into a dimension table if the scope ever failed.
+    "devices",
 )
 
 # The instant R-114's planted burst completes. A sixth charge here lands inside
@@ -269,15 +273,35 @@ def test_an_unknown_reference_is_an_answer_not_an_integrity_error(conn, ctx):
 def test_every_problem_is_reported_at_once(conn, ctx):
     """Same standard the rule validator holds: an author fixing errors one round
     trip at a time is an author who stops using the endpoint."""
-    draft = sixth_cnp_charge(card_id="CARD-NOPE", device_id="DEV-NOPE",
-                             merchant_id="MER-NOPE")
+    draft = sixth_cnp_charge(card_id="CARD-NOPE", merchant_id="MER-NOPE",
+                             account_id="ACC-NOPE")
     with pytest.raises(FabricationRefused) as caught:
         simulate_transaction(conn, draft.columns(), ctx=ctx)
     assert len(caught.value.reasons) == 3
 
 
+def test_an_unseen_device_is_invented_rather_than_refused(conn, ctx):
+    """A device is OBSERVED; an account is OPENED — and the sharpest use of that
+    line is here, because "what if this charge came from a device we have never
+    seen?" is the R-114 question. `device_first_seen_min` is 21 of its 87 points,
+    so a what-if that could only use fingerprints the generator planted could
+    not ask it.
+
+    The device is created inside the rolled-back scope like everything else, and
+    `test_a_fabricated_transaction_writes_nothing` covers `devices` for exactly
+    this reason.
+    """
+    published = _publish(conn, ctx,
+                         sixth_cnp_charge(device_id="DEV-NEVER-SEEN"))
+    signal = next(s for s in published.decision.signals
+                  if s.feature_key == "device_first_seen_min")
+    assert signal.feature_value == 0, "first seen at the instant it was presented"
+    assert fetch_value(conn, "SELECT count(*) AS n FROM devices WHERE device_id = %s",
+                       ("DEV-NEVER-SEEN",)) == 0, "and gone with the scope"
+
+
 def test_a_fabricated_row_may_not_borrow_a_real_id(conn, ctx):
-    with pytest.raises(FabricationRefused, match="really"):
+    with pytest.raises(FabricationRefused, match="already exists"):
         simulate_transaction(conn, sixth_cnp_charge(txn_id="TXN-48291").columns(),
                              ctx=ctx)
 
@@ -409,7 +433,7 @@ def test_the_endpoint_serves_a_schema_valid_payload(client):
 def test_a_refusal_is_a_422_carrying_every_reason(client):
     response = client.post(
         "/simulate/transaction", headers=ADMIN,
-        json=_body(sixth_cnp_charge(card_id="CARD-NOPE", device_id="DEV-NOPE")))
+        json=_body(sixth_cnp_charge(card_id="CARD-NOPE", merchant_id="MER-NOPE")))
     assert response.status_code == 422
     assert len(response.json()["detail"]) == 2
 

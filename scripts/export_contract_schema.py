@@ -35,6 +35,11 @@ from glassbox.contract.catalog import (           # noqa: E402
 from glassbox.contract.dispositions import CaseVerdict, Disposition  # noqa: E402
 from glassbox.contract.executions import ExecutionRecord  # noqa: E402
 from glassbox.contract.explanation import CaseReport, CopilotResponse  # noqa: E402
+from glassbox.contract.ingest import (           # noqa: E402
+    AuthorizationOutcome,
+    CycleReport,
+    IngestReceipt,
+)
 from glassbox.contract.kpis import KpiSet, KpiTile  # noqa: E402
 from glassbox.contract.models import AlertDetail, AlertSummary  # noqa: E402
 from glassbox.contract.queue import QueueEntry    # noqa: E402
@@ -64,6 +69,8 @@ CONTRACTS: dict[str, tuple[str, tuple[type, ...]]] = {
                       (SimulatedDecision, RuleSimulation, TransactionSimulation)),
     "catalog.v1": ("GlassBox control-plane contract, version 1",
                    (RuleSummary, RuleDetail, FeatureView, ReferenceVocabulary)),
+    "ingest.v1": ("GlassBox arrival contract, version 1",
+                  (AuthorizationOutcome, IngestReceipt, CycleReport)),
 }
 
 

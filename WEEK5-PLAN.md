@@ -1,6 +1,7 @@
 # Week 5 — Plan: roles, dispositions, simulation, rule authoring, console
 
-**Status:** sessions 1–4 of 5 complete — 393 tests green, `alert.v1`'s digest
+**Status:** sessions 1–4 of 5 complete, plus an unplanned **session 4b**
+(arrival, prevention and the scheduler) — 443 tests green, `alert.v1`'s digest
 unmoved. Session 5 remains. Each ends with the suite green and this file
 updated.
 
@@ -102,6 +103,8 @@ Answer these when you reach them; record the answer in the table above.
 | ~~O2~~ | ~~**Does a restated case reappear in the queue after disposition?**~~ | **ANSWERED, session 1: no — a case a person worked stays out, and `include_worked=true` is how you look at it.** The stronger option (return it when new evidence arrives after the verdict) was rejected for this dataset, not in principle: the synthetic settler derives `decided_at` from `first_event_at`, so "new evidence after the verdict" fires on an essentially arbitrary subset of the fixtures and would read as noise in a demo. Revisit when a case is folded onto after a human has judged it, which nothing here does yet |
 | ~~O3~~ | ~~**What a `shadow` rule writes**~~ | **ANSWERED, session 3: it evaluates, records everything, and takes nothing.** Three columns on `decisions` (`shadow_score`, `shadow_action`, `shadow_rules`) and one flag on `decision_conditions` (`is_shadow`, with `contributed` forced to 0 by a rewritten CHECK). The recorded answer is what the WHOLE decision would have been with the shadow rules active — live and shadow rules consolidated together — not what the shadow rule would say alone: promoting a rule does not move it into an empty room, a live veto still caps it and §6 still deduplicates it. "Evaluate and record nothing" was rejected because it makes promotion a leap of faith and reduces `shadow` to a spelling of `inactive`. No separate `shadow_decisions` table: a shadow evaluation is not a second decision, and a row of its own would land in the denominator of alert volume and every rate §11 publishes |
 | ~~O4~~ | ~~**Whether `/simulate/transaction` is reachable by the analyst role or admin only**~~ | **ANSWERED, session 4: admin only.** It is the one simulation that fabricates an EVENT, and an event is what this system's entire record is made of — a payload showing a score against a transaction id is one screenshot away from being read as something that occurred. Every other defence is on the payload (`persisted: false`, the row echoed as inserted, four named limits) and every one of them depends on somebody reading it; the role is the defence that does not. The cost is real and accepted: an analyst working a case cannot ask *"what if this charge had been $4,000?"* without an admin. Revisit if the console makes that a common question |
+| ~~O5~~ | ~~**What the queue does when a case is raised while an analyst is looking at it**~~ | **ANSWERED, before session 5: poll, badge, and let the analyst click.** The console polls `GET /cycle` and watches the watermark; when it moves, a "N new cases" control appears and **the list does not change until it is clicked**. Auto-refresh was rejected for a specific reason rather than a general one: the queue is ordered by `score × exposure × recency`, so a new arrival does not append — it INSERTS, and every row below it shifts. Reordering a list under a pointer is how an analyst dispositions the case they were not reading, and a disposition is append-only, so the correction stays in the record forever. Never refreshing was rejected because the demo's whole point is watching something arrive. The badge keeps that and costs one piece of state |
+| ~~O6~~ | ~~**Whether the console gets a "send a charge" screen**~~ | **ANSWERED, before session 5: yes, admin only, and it posts to the real `/authorize`.** A simulate-only screen would have been safe and would only ever have been able to say *would be* declined — which is the exact gap session 4b was built to close, reopened in the surface most people will judge the system by. What makes the real one defensible is that nothing about it is disguised: the response carries `persisted: true`, the row carries `source = 'authorized'`, and `GET /alerts` will show the case it raised. Two constraints on the build, both consequences of O4: the screen is behind `require_role('admin')` and the console must never call `/authorize` to "test" anything — `/simulate/transaction` is the endpoint that answers a hypothetical, and blurring them in the UI would undo the reason they are separate endpoints |
 
 ---
 
@@ -307,22 +310,130 @@ All met.
 
 ---
 
-# Session 5 — React console and the documentation
+# Session 4b — Arrival: ingestion, prevention, and the scheduler
 
-**Goal:** the analyst and admin surfaces exist in a browser, and the project's
-own record explains what was built and why.
+**Not in the original plan.** It was asked for after session 4 landed, and the
+question behind it was fair enough to record verbatim: *"if we can't demo a
+detected fraudulent transaction, and there is no engine running, what is the
+purpose of all of this?"*
+
+Half of that premise was wrong and the wrong half matters less. `bootstrap.ps1`
+did detect fraud end to end — 9,844 transactions in, 7 alerts out, 4 preventive
+actions, nine KPI tiles from stored rows. What it could not do was **react**.
+Rows arrived only by regenerating the dataset and rebuilding the database, so
+every demo was a rebuild rather than a catch; and `run_cycle.py` was run by
+hand, so §15's "one service, one database, **a scheduler**" was two thirds true
+and had been since Week 2.
+
+The other half of the premise was exactly right, and worse than stated: the
+system could not **prevent** anything either. Every transaction arrived already
+stamped `auth_result='approved'`, so §7's `challenge` was a note attached to
+money that had already moved, and §7.3's whole argument — that prevention needs
+a higher threshold *because a wrong block costs a customer* — rested on a cost
+nothing here could incur.
+
+### Three questions, answered before building
+
+| | Question | Answer |
+|---|---|---|
+| A | What does the ingest endpoint MEAN? | **An authorization request.** The engine decides before the row is committed and the row carries the decision, so a declined charge is never an approved transaction. The alternative — ingest settled rows and evaluate afterwards — is also built, as a separate door, because it is the only way to describe a decline |
+| B | What triggers evaluation? | **Both.** `/authorize` runs the inline lane synchronously and returns the verdict; a background thread runs the async lane on an interval. The inline lane is per-event by definition and the async lane fundamentally cannot be — L-203's `evaluation_lag` is 15 minutes precisely so the ring is scored *after* the transfers land |
+| C | What can be ingested? | **Transactions, events and links.** Two of the four rules are unreachable without the last two: L-203 discovers a ring from `entity_links` and S-077 reads a password reset from `events`. Transactions alone would demo half the model |
 
 ### Deliverables
 
 | | Item | Notes |
 |---|---|---|
-| **TODO** | Vite + React scaffold, dev proxy `/api` → `:8000` (decision 9) | Client types generated from the committed JSON Schemas or `/openapi.json` |
-| **TODO** | Queue and alert detail | Bound to `queue.v1` and `alert.v1`. The queue renders the **published priority factors**, since the ordering explains itself |
+| **DONE** | `db/migrations/0032_ingest.sql` | `source` on transactions, events, entity_links and devices; `ingest_watermark`; the `auth_result` CHECK 0003 only had as a comment; two arrival-order indexes |
+| **DONE** | `src/glassbox/ingest/records.py` | One gate for "a row this system will accept", shared by both doors AND by session 4's what-if — which is what stops the simulation approving something the live path refuses |
+| **DONE** | `ingest/authorize.py` — `POST /authorize` | Insert presumed-approved → scoped feature pass → inline lane → precedence → write the result back → persist and issue → recompute. Nine steps, one transaction |
+| **DONE** | `ingest/arrivals.py` — `POST /ingest/{transactions,events,links}` | Partial acceptance, duplicates counted separately from rejections, provenance stamped |
+| **DONE** | `ingest/watermark.py`, `ingest/cycle.py` | Event-time watermarks; a tick that evaluates what arrived rather than the population — decision 33 |
+| **DONE** | `scheduler.py` + the FastAPI lifespan hook | §15's third component. Off unless `GLASSBOX_CYCLE_SECONDS` allows it; the suite sets `0` |
+| **DONE** | `contract/ingest.py` — `ingest.v1` | A sibling. `Action`, `Signal`, `Evidence` reused unmodified; `alert.v1`'s digest unmoved |
+| **DONE** | `scripts/demo_burst.py` | The demo, in one screen, in-process or over HTTP, with `--clean` |
+| **DONE** | *(not planned)* **D10 found and fixed** | The cluster builder handed the second cluster the first one's id |
+| **DONE** | Three test modules — 50 tests | `test_authorize.py`, `test_ingest.py`, `test_cycle.py`. **443 total** (was 393) |
+
+### Acceptance
+
+All met.
+
+- **Five charges arrive one at a time; the fifth is stopped.** ✔ 87 / `challenge`
+  / `declined` with `step_up_required`, a case raised, a step-up issued over
+  `sms_otp` and a notification over `phone` — and the first four approved at 0,
+  which is the half that proves it is not declining everything.
+- **The committed row says `declined`.** ✔ and there is no moment at which it
+  said otherwise: the write-back is inside the same uncommitted transaction as
+  the insert.
+- **The system reacts without being asked.** ✔ 12 ingested rows, and the
+  scheduler noticed within one interval: 13 decisions, 259 ms.
+- **A tick does not re-score the population.** ✔ one new charge → 5 affected
+  subjects, ~90 ms, against ~20 s for a full pass and 7 ms for an idle tick.
+- **`alert.v1`'s digest has not moved.** ✔ nor has `simulation.v1`'s, through a
+  refactor that moved `TransactionDraft` onto a shared base.
+- Suite green: **443**.
+
+### What this deliberately does not do
+
+- **A stopped charge has no second act.** Nothing answers a step-up, so the demo
+  can show a charge being declined and never one being released after the
+  customer authenticates. That is the next obvious piece and it is not built.
+- **Dimension rows cannot be ingested.** A device is observed; a card, account,
+  customer or merchant is *opened*, and onboarding is not modelled. The cost is
+  concrete: a genuinely new mule ring cannot be ingested, because it needs four
+  accounts that do not exist.
+- **Nothing is exactly-once.** The cycle is at-least-once by design, because
+  both halves it drives are already idempotent.
+
+---
+
+# Session 5 — React console and the documentation
+
+**Goal:** the analyst and admin surfaces exist in a browser, and the project's
+own record explains what was built and why.
+
+> **Revised after session 4b.** Four things changed, and the third is a UI
+> problem that did not exist when this section was written.
+>
+> 1. **There is a ninth contract**, `ingest.v1`, and a new best demo. The
+>    strongest thing this system can now do in front of an audience is not a
+>    queue — it is a charge being stopped. `scripts/demo_burst.py --http` is the
+>    working specification for that screen, and **O6** says the console builds
+>    it against the real `/authorize` rather than against the simulator.
+> 2. **Liveness is now a claim the console could make**, which means it is a
+>    claim it could make falsely. `GET /cycle` exists so it does not have to:
+>    whether the scheduler is running, its interval, the watermark and the last
+>    few ticks all come off the payload. A green "live" dot that is a hardcoded
+>    `true` is §11's "console copy that outruns the system" in a new place.
+> 3. **The queue moves underneath the analyst.** Before 4b nothing changed once
+>    a page had loaded; now a background cycle can raise a case at any moment.
+>    **O5** answers it: poll `/cycle`, badge the count, and let the analyst
+>    click. The queue is ordered by `score × exposure × recency`, so an arriving
+>    case does not append — it *inserts*, and every row below it shifts. A list
+>    that reorders under a pointer is how somebody dispositions the case they
+>    were not reading, and a disposition is append-only.
+> 4. **Three payloads render the same bar** and one of them is not real.
+>    `AlertDetail`, `SimulatedDecision` and `AuthorizationOutcome` all carry
+>    `Signal`, `Action` and `Evidence` unmodified — deliberately, so one
+>    component renders all three. `persisted` is the field that distinguishes a
+>    thing that happened from a thing that would have, and it has to be
+>    unmissable rather than available.
+
+### Deliverables
+
+| | Item | Notes |
+|---|---|---|
+| **TODO** | Vite + React scaffold, dev proxy `/api` → `:8000` (decision 9) | Client types generated from the committed JSON Schemas or `/openapi.json`. **Nine schemas now**, so **D6** has to be decided rather than discovered — see the traps |
+| **TODO** | Queue and alert detail | Bound to `queue.v1` and `alert.v1`. The queue renders the **published priority factors**, since the ordering explains itself. Polls `GET /cycle`; when the watermark moves it badges "N new cases" and **does not reorder until clicked** (O5) |
 | **TODO** | Disposition control | The analyst's false-positive mark, against session 1's endpoint |
 | **TODO** | KPI tiles | Render each tile's `basis`, `caveat`, `numerator`/`denominator` **from the payload**. Do not write tile copy in the UI |
 | **TODO** | Rule list, rule detail, rule authoring, simulate, publish, promote | The admin surface, against sessions 2 and 3 |
-| **TODO** | §11's "console copy that outruns the system" | `architecture.md` flags two strings — an escalation toast promising a model retrain, and deltas implying a measured prior period. Neither is true. This is the moment they were deferred to |
-| **TODO** | `HANDOFF.md` §W5, `README.md` updates | Newest week first. Every decision from this file's tables carries into the handoff |
+| **TODO** | **One score-bar component, three payloads** | `alert.v1`, `simulation.v1` and `ingest.v1` share `Signal`/`Action`/`Evidence` by design. A second bar implementation is the failure mode decision 13 exists to prevent, moved into the UI |
+| **TODO** | **System strip, bound to `GET /cycle`** | Scheduler running or not, its interval, the event-time watermark, the last ticks. Every word of it from the payload — including "not running", which is what the suite's own configuration produces |
+| **TODO** | **The live authorization screen — admin, and it is the demo** | Posts to the real `POST /authorize` (O6). Send a charge; watch it approved four times and declined the fifth, with the bar and the issued step-up. `scripts/demo_burst.py --http` is the working specification. Behind `require_role('admin')`, and it must never be used as a what-if — that is `/simulate/transaction` |
+| **TODO** | §11's "console copy that outruns the system" | `architecture.md` flags two strings — an escalation toast promising a model retrain, and deltas implying a measured prior period. Neither is true. A third now exists in potential: any liveness indicator not sourced from `/cycle` |
+| **TODO** | `HANDOFF.md` §W5, `README.md` updates | Newest week first. Every decision from this file's tables carries into the handoff — sessions 1–4 **and 4b** |
 
 ### Acceptance
 
@@ -330,7 +441,33 @@ own record explains what was built and why.
 - No tile in the console asserts anything the payload does not say.
 - No number is rendered without the denominator or caveat the contract publishes
   alongside it.
+- **A charge sent from the browser is declined, and the case it raised is
+  reachable from the queue in the same session.** The demo, in a browser.
+- **Nothing in the console claims the system is live except from `/cycle`** —
+  and with `GLASSBOX_CYCLE_SECONDS=0` the console says so plainly rather than
+  showing a stale green dot.
+- **A simulated decision and a real one are never visually confusable.** Same
+  bar, different frame, and `persisted` is what decides which.
 - `HANDOFF.md` §W5 exists and this file is marked superseded.
+
+### Traps
+
+- **Set `GLASSBOX_CYCLE_SECONDS` deliberately for console development.** A
+  `glassbox serve` behind the Vite proxy runs the cycle every 30 seconds by
+  default and commits to whatever `GLASSBOX_DSN` points at. That is correct for
+  a demo and confusing while building a queue screen, because rows appear that
+  no click caused. Pick a value; do not inherit one.
+- **The console must never call `/authorize` to "test" anything.** It commits, it
+  can decline a charge, and it issues a step-up. `/simulate/transaction` is the
+  one that answers a hypothetical, and the two are deliberately different
+  endpoints — the console should not be the place that blurs them.
+- **D6 lands here.** The exporter's `ref_template` is document-root-absolute
+  while Pydantic nests `$defs` per model, so every published schema contains
+  dangling `$ref`s. Generating a TypeScript client is the moment that stops
+  being free. Two honest options and one dishonest one: fix the exporter and
+  re-pin `alert.v1`'s digest as a reviewed act, publish `alert.v2`, or generate
+  from `/openapi.json` and leave the committed schemas as the frozen artifact
+  they are. Choose in the plan, not in a build script.
 
 ---
 
@@ -348,12 +485,25 @@ Check these at the end of every session, not only at the end of Week 5.
    grep test guards is still the only one.
 4. **Simulation writes nothing.** Row-count assertions, on every simulation path
    — and on the transaction path also a direct test that watches the scoped
-   feature pass write inside the scope and be gone after it.
-5. **The explanation surface reads six relations and no more.**
-   `explain/evidence.ALLOWED_RELATIONS`, proved by a cursor hook. Nothing in this
-   plan should widen it; if a console screen needs a fact from outside that set,
-   the fact belongs on the alert.
+   feature pass write inside the scope and be gone after it. Session 4b makes
+   this sharper rather than weaker: `/authorize` and `/simulate/transaction` now
+   share one validation gate and one row writer, and the ONLY difference between
+   them is the rollback. A simulation that could write would be
+   indistinguishable from an authorization.
+5. **The explanation surface reads eight relations and no more.**
+   `explain/evidence.ALLOWED_RELATIONS`, proved by a cursor hook. Nothing in
+   this plan should widen it further; if a console screen needs a fact from
+   outside that set, the fact belongs on the alert.
 6. **Every number that reaches an explanation passes through `Quoter.q`.**
+7. **Raw capture is append-only.** The one UPDATE in the project is
+   `/authorize`'s write-back of the engine's own verdict, confined to a row the
+   same call inserted and has not committed, and guarded on `source` so it
+   cannot reach a generated or ingested row. Anything else that wants to change
+   a `transactions` row is wrong.
+8. **Nothing asserts liveness.** Whether the engine is running comes from
+   `GET /cycle` and the `ingest_watermark` rows behind it. A console indicator
+   that is a hardcoded `true` is the same unearned claim §11 refuses on a tile,
+   in the one place a viewer has no way to check it.
 
 ---
 
@@ -384,6 +534,12 @@ Append here. One row per decision the plan did not specify, with its reasoning.
 | 28 | 4 | **`synthetic_label` is REFUSED by the engine, not merely absent from the request model** | It is planted ground truth — the denominator of §11's false-negative tile and of every precision number `/simulate/rule` publishes. Omitting it from `TransactionDraft` stops the HTTP caller; refusing it in `prepare` stops every caller, including a test and a future console-side batch path. Same layered-enforcement argument decision 12 made for the disposition vocabulary, and it is what turns "nothing labels it, so it sits outside every ground-truth join" from a published caveat into an enforced one |
 | 29 | 4 | **The two ways of not being recomputed are kept APART in the runner, not classified afterwards** | `driven_by` returns a `DriverSplit` — driven, driven-by-another-relation, uncomputable — because they are different claims about the answer: `accounts_per_device` was read at a stored value that is correct and current, while `new_payee_then_drain` has no computed value at all. The first draft merged them into one `skipped` map and the contract layer recovered the distinction by looking for `"driven by"` in the reason string, which is a second definition of the split living in a substring |
 | 30 | 4 | **The sandbox writer stayed in `engine/simulate.py` rather than moving beside `rules/publish.apply_definition`** | Session 3's handoff suggested the opposite, and the reasoning behind it does not carry: `apply_definition` is shared because the rule what-if and the publish path write the SAME rows, and the only difference is the COMMIT. A fabricated transaction has no publish path and never will — there is nothing on the other side to share with, and `rules/` is the control plane. `insert_arrival` and `scoped_feature_pass` are public rather than private for the reason the plan's own trap gives: the guarantee has to be testable directly, not inferred from a row-count total |
+| 31 | 4b | **`/authorize` writes the row as PRESUMED APPROVED, then writes the engine's verdict back into it** | The row has to exist before evaluation — `mcc_is_new_for_customer` keys on `txn_id` and there is nothing to key on until it does — and it has to be `approved` while the features are computed, because `card_cnp_count` filters on approved CNP charges and a charge that does not count itself makes the fifth of five read four. Presuming approval is also what happens: the processor is on track to approve and the risk engine is the thing that declines. Raw capture stays honest because the write-back is inside the same uncommitted transaction as the INSERT — no reader ever observes the row holding a value other than its final one, so there is no moment at which a blocked charge existed as an approved transaction |
+| 32 | 4b | **A `challenge` commits as `declined` with `decline_reason='step_up_required'`** | A step-up nobody has answered has not been passed, and letting the money move while asking the question makes the step-up decorative. It is also how 3DS behaves — the charge is refused and the customer retries after authenticating. This matters more than it looks because **no shipped rule has action `block`**: R-114 challenges, L-203 and S-077 hold, T-021 allows. If `challenge` did not stop a charge, nothing in this system would, and the prevention demo would not exist |
+| 33 | 4b | **The cycle evaluates the AFFECTED SUBJECTS, not the population — and the narrowing is by subject, never by rule or feature** | `plan_evaluations` plans every subject of every type a lane's rules name, so a naive tick re-scores 9,844 transactions to notice one charge: twenty seconds of work every thirty seconds, forever. `affected_subjects` narrows to the arriving rows and the entities behind them. Narrowing by RULE or by FEATURE would have been the tempting version and is the dangerous one — a subject that is re-evaluated is re-evaluated in full against its whole history, which is the property that makes an incremental tick and a full pass produce the same decision. One trap worth naming: `plan_evaluations` treats an empty `subject_ids` list as *no filter*, so an empty affected set has to skip the lane rather than pass the list |
+| 34 | 4b | **A device is OBSERVED, so an unseen fingerprint is created; a card is OPENED, so an unknown one is refused** | `device_first_seen_min` is measured from the instant a fingerprint is first presented and is 21 of R-114's 87 points, so refusing an unseen device would mean the only demonstrable "new device" is one the generator planted — the opposite of what the feature is for. It is done by all three writers through one helper, positioned between validation and the INSERT: earlier and a row rejected for an unrelated reason leaves a device behind, later and the foreign key fires first. The cost is stated rather than hidden: a genuinely new mule ring cannot be ingested, because accounts are opened and this does not model onboarding |
+| 35 | 4b | **The watermark is EVENT time, and the cycle's `as_of` is read from the data** | The fixtures are pinned to `GLASSBOX_NOW` (2026-01-15) and an ingested charge is dated at the instant it claims to have occurred. A wall-clock watermark would sit seven months after every row it gates, so the first tick would consume everything and every tick after it would consume nothing. Same reasoning W3.6 #2 gives for using `first_event_at` rather than `alerts.created_at`, applied to the one place where getting it wrong is silent rather than visible |
+| 36 | 4b | **§18's decision 6 is answered at 30 seconds, and the number is labelled a demo number** | §2.2's 15 minutes is a production figure chosen against graph-rebuild cost at real volume, and it "sets the floor on detection latency for every network pattern". Here the graph is a handful of accounts and a full tick is under a second, so fifteen minutes would buy nothing and cost the only thing a prototype has to show — that the system reacts. `0` disables it entirely, which is what the test suite sets, because a thread committing into a rolled-back test transaction is the least debuggable failure this project could produce |
 
 ---
 
@@ -397,6 +553,7 @@ Append here, fixed or not.
 | D7 | 2 | **A subject type can be added by INSERT but only reached by a code change, and nothing noticed the gap.** `ref_subject_type` is a vocabulary table — "new values are INSERTs, never migrations" (`0001_reference.sql`) — but the planner reaches a subject type only if `engine/evaluation._SUBJECT_SQL` has an entry for it. A rule on a subject type that exists in the vocabulary and not in the planner is LOADED by the engine, never planned, and never evaluated: no error, no firing, nothing in the ledger. The two sets happen to be equal today (seven each), which is why nobody had hit it | **GUARDED, not fixed.** `PLANNABLE_SUBJECT_TYPES` is now derived from the planner and `rules/validate.py` rejects a draft naming anything outside it, with a message saying a new subject type is a code change. The README already says so in its extension-cost table; now the validator does. Actually reaching an eighth subject type is still a code change, by design |
 | D8 | 3 | **Editing a rule destroys the condition ledger behind its old conditions.** `rule_conditions.condition_id` is referenced by `decision_conditions` with `ON DELETE CASCADE` (0023), and an edit replaces a rule's conditions wholesale — so repricing a condition deletes every historical row that recorded it firing. The evidence §10 used to *find* the misprice is deleted by the act of fixing it, and `v_condition_performance` then reports the new price as though it had always been in force | **OPEN, and named in `publish.apply_definition`'s docstring.** The definition survives — that is what `rule_versions.conditions` is for — but the per-firing history does not. Not fixed here because the fix is a schema change with a real cost either way: `ON DELETE SET NULL` orphans ledger rows from the condition they measured, and versioning `rule_conditions` properly means the ledger points at `(condition_id, version)`, which is a migration on the largest table in the database (79,068 rows per cycle). Worth doing before any real repricing history matters; harmless on a dataset rebuilt from scratch |
 | D9 | 3 | **`v_condition_performance` does not separate shadow firings from live ones.** The view groups by `condition_id` and now sees `is_shadow` rows too. Every rate in it (fire rate, direction-aware precision) is still correct — a firing is a firing — but `mean_contribution` is diluted across a promotion boundary, because a shadow firing contributes 0 by construction | **OPEN, deliberately, and unreachable today.** No rule ships in shadow, so the view is byte-identical on this dataset. Separating them is one `is_shadow` column in the `GROUP BY` and a decision about what `GET /rules/{id}` should show for a rule that has been both — which is a question worth answering with a real shadow rule in front of you rather than in advance |
+| D10 | 4b | **The cluster builder handed the second cluster the first one's id.** `_stable_id` allocated `RING-{1187 + seq}` where `seq` was the candidate's index, and candidates are ordered by device id — so the first device-fanout cluster whose device sorted before `DEV-F90D2` was allocated `RING-1187` and collided with the shipped ring on the primary key. Four weeks unreachable, because the fixtures build exactly one cluster and nothing could add a second; reachable in one request the moment `entity_links` could arrive over HTTP | **FIXED.** The allocator now takes the lowest free number against the ids already in `clusters`, growing the taken set as it allocates, so two new clusters in one build cannot collide either. `DEV-F90D2` keeps `RING-1187` — it is a signed-off id in `fixtures/expected_scores.json` — through an explicit `SIGNED_OFF` map rather than a string comparison buried in an allocator. `test_ingest.py::test_a_second_cluster_does_not_take_the_first_ones_id` pins it |
 | D6 | 1 | **Published schemas contain dangling `$ref`s.** The exporter uses `ref_template="#/$defs/{model}"`, which is document-root-absolute, but Pydantic nests the referenced definitions under each model's own `$defs` — so `#/$defs/Signal` in `alert.v1` resolves to nothing at the document root. Pre-existing since Week 2 and true of every contract, not introduced here | **OPEN, and deliberately not fixed.** Correcting the template changes `alert.v1`'s bytes, which is exactly the deliberate act the pinned digest exists to force. It costs nothing until session 5 generates a TypeScript client from these files, which is when it must be decided — as `alert.v2`, or by hoisting `$defs` in the exporter and re-pinning |
 
 ---
@@ -412,3 +569,4 @@ Append one entry per session. Newest last.
 | 2026-08-03 | 2 | Everything in the session-2 table, plus the two vocabulary consolidations it did not plan. **334 tests** (was 262), all green. **D4 closed**, **O1 answered**, **D7 found and guarded**. `catalog.v1` published; `simulation.v1` gained `RuleSimulation` as a reviewed diff; `alert.v1`'s digest unmoved | Nothing from the session-2 list was cut. `/simulate/rule` reports `would_alert` as an upper bound rather than a case count, because §9's hygiene runs at persist time and nothing is persisted — stated on the payload, not fixed | **Session 3, and it is the one that pays for the feature.** Four things it should know: (1) `rules/validate.py` is built and shared — `POST /rules` calls `ensure_valid` and needs no validation of its own, and `normalised()` is the only thing that rewrites a draft; (2) the publish path can lift `_apply_draft` out of `engine/simulate.py` — it is already the exact INSERT/UPDATE pair, minus the rollback; (3) **the shadow gate has a published field waiting for it**: `RuleSummary.takes_action` returns `True` for a shadow rule today and `test_catalog_api.py` asserts that, with a comment saying to flip both when the gate lands — that test is the tripwire, not a contradiction; (4) O3 is still open and session 3 must answer it — what a shadow rule WRITES |
 | 2026-08-04 | 3 | Everything in the session-3 table, plus `tests/test_shadow.py`, which it did not plan. **369 tests** (was 334), all green. **D1 and D2 closed**, **O3 answered**, **D8 and D9 found** and both left open with reasons. Migration `0030` (three shadow columns, one ledger flag, two publish functions), seed `0031` (the backfill, and what it deliberately does not claim about `0026`), `rules/publish.py`, `api/routes_rules.py`. `simulation.v1` and `catalog.v1` changed as reviewed diffs; `alert.v1`'s digest unmoved | Nothing from the session-3 list was cut. Two things are *deliberately* not done: `v_condition_performance` still pools shadow firings with live ones (**D9**, unreachable on this dataset), and an edit still cascades away its own condition ledger (**D8**) | **Session 4** — `POST /simulate/transaction`. Four things it should know: (1) `simulation_scope` is unchanged and still the only thing standing between a fabricated `feature_values` row and a corrupted audit store — test it directly, not incidentally; (2) `rules/publish.apply_definition` is now shared by the publish path and the rule what-if, so anything session 4 adds to the sandbox belongs beside it rather than inside `engine/simulate.py`; (3) a fabricated transaction will be evaluated against **live rules only** — a shadow rule will produce `shadow_action` on the simulated result exactly as it does on a stored decision, and `SimulatedDecision` already has the three fields for it; (4) the import order is now `contract/simulation.py` -> `engine/simulate.py` -> `rules/publish.py` -> `contract/catalog.py`, so anything session 4 adds to `rules/publish.py` may import `contract.catalog` and must not import `contract.simulation` |
 | 2026-08-04 | 4 | Everything in the session-4 table, plus two items it did not plan: the engine REFUSES a fabricated `synthetic_label` rather than merely omitting it, and `tests/test_simulate_transaction.py` (24 tests). **393 tests** (was 369), all green. **O4 answered: admin only.** `simulation.v1` gained `TransactionSimulation` as a reviewed diff; `alert.v1`'s digest unmoved. No migration, no seed — this session is entirely code, which is itself worth noting: fabricating an event needed nothing the schema did not already have | Nothing from the session-4 list was cut, and no defect was found. Two things are *deliberately* not done: the fabricated charge is evaluated as a `transaction` subject in one lane only — the card, account and customer it references are not re-evaluated, so S-077 and L-203 cannot appear in the answer — and graph features are read at their stored value rather than rebuilt. Both are named on the payload's `limits` rather than left to be discovered | **Session 5** — the React console and the documentation, and it is the only session left. Five things it should know: (1) **`contract/simulation.v1.schema.json` moved this session and `alert.v1` did not** — the digest test is the tripwire, and a TypeScript client generated from these files hits **D6** (dangling `$ref`s, open since Week 2 and true of every contract), which session 5 must decide about rather than discover; (2) there are now **three** simulation endpoints and two of the three are admin-only — `/simulate/subject` is the analyst's, `/simulate/rule` and `/simulate/transaction` are not, so `GET /me` is what the console renders off; (3) `TransactionDraft.columns()` drops unstated fields deliberately — an omitted column is not a null one, and a form that posts `null` for every empty input will get a different answer than one that omits them; (4) the limits on a transaction simulation are **rows with codes**, so render them from the payload exactly as §11's tile caveats are rendered — writing that copy in the UI is the same mistake in a new place; (5) the two console strings `architecture.md` §11 flags (the retrain toast, the deltas implying a measured prior period) are still unwritten and unfixed, and session 5 is where they were deferred to |
+| 2026-08-04 | 4b | **Not in the plan** — asked for after session 4, on the grounds that a system which cannot demo a catch or a prevention has not demonstrated much. Migration `0032`, `src/glassbox/ingest/` (records, authorize, arrivals, watermark, cycle), `scheduler.py`, `contract/ingest.py` (**ingest.v1**), `api/routes_ingest.py`, `scripts/demo_burst.py`. `POST /authorize` decides a charge before the row commits, so a declined charge is never an approved transaction; `POST /ingest/{transactions,events,links}` takes settled rows, which is the only way to reach L-203 and S-077; `glassbox serve` runs the cycle every 30s. **443 tests** (was 393). **D10 found and fixed.** §18 decision 6 answered. `alert.v1` AND `simulation.v1` digests both unmoved | Nothing was cut. Three things are *deliberately* absent and named in the README: nothing answers a step-up, so a stopped charge is never released; dimension rows cannot be ingested, so a genuinely new ring cannot be; and the cycle is at-least-once | **Session 5**, unchanged in scope but with more to bind to. Four things it should know: (1) there is a **ninth contract**, `ingest.v1`, and `AuthorizationOutcome` is deliberately shaped like `SimulatedDecision` — same `Action`/`Signal`/`Evidence` — so one bar component renders both, with `persisted` the field that distinguishes them; (2) `GET /cycle` publishes whether the scheduler is running, its interval and its recent ticks, so a console can SHOW that the system is live rather than asserting it — the same standard §11 holds for a tile; (3) `scripts/demo_burst.py --http` is the demo script and the console should be able to do exactly what it does; (4) the suite pins `GLASSBOX_CYCLE_SECONDS=0` in `conftest.py` before anything imports the app — a Vite dev setup that starts a real service needs the interval set deliberately, not inherited |

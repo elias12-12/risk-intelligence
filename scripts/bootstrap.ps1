@@ -110,10 +110,17 @@ Write-Host @'
 Next:
   psql "$env:GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   human-readable proof
   python scripts/case_report.py --alert 5 --citations           the filing draft, sourced
-  python -m glassbox serve                                      read API on :8000
+  python -m glassbox serve                                      API on :8000, cycle every 30s
   curl http://127.0.0.1:8000/alerts                             alert.v1
   curl http://127.0.0.1:8000/queue                              queue.v1, priority-ordered
   curl http://127.0.0.1:8000/alerts/1/executions                executions.v1
   curl http://127.0.0.1:8000/kpis                               kpis.v1, nine tiles
   curl http://127.0.0.1:8000/alerts/5/copilot                   explanation.v1
+
+The live demo — five charges arriving one at a time, on a device nobody has
+seen. The first four are approved; the fifth scores 87 and is DECLINED with a
+step-up. Nothing about it was in the fixtures.
+
+  python scripts/demo_burst.py                                  ingest.v1, end to end
+  python scripts/demo_burst.py --http                           through the running API
 '@ -ForegroundColor Green

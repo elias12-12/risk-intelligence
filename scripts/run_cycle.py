@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from glassbox import config                       # noqa: E402
 from glassbox.db import connect                   # noqa: E402
 from glassbox.engine.evaluation import EngineContext, run_lane  # noqa: E402
+from glassbox.ingest import watermark              # noqa: E402
 
 
 def main() -> int:
@@ -30,6 +31,13 @@ def main() -> int:
         ctx = EngineContext.load(conn)
         totals = run_lane(conn, args.lane, as_of, run_id=args.run_id,
                           subject_ids=args.subject, ctx=ctx)
+        # A hand-run lane and a scheduled one advance the same watermark, so
+        # `bootstrap.ps1` leaves a database the background cycle recognises as
+        # already caught up rather than one it re-scores from scratch. Skipped
+        # for a restricted run: evaluating four subjects is not evidence that
+        # the population has been consumed.
+        if not args.subject:
+            watermark.advance(conn, args.lane, as_of)
         conn.commit()
     print(f"lane={args.lane}  as_of={as_of.isoformat()}  {time.perf_counter() - t0:.1f}s")
     # Printed in pipeline order, and every key run_lane reports is printed —

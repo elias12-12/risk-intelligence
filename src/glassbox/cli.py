@@ -18,6 +18,7 @@ COMMANDS = {
     "kpis": "kpi_report.py",
     "explain": "case_report.py",
     "contract": "export_contract_schema.py",
+    "demo": "demo_burst.py",
 }
 
 
