@@ -1,19 +1,258 @@
 # Handoff — GlassBox
 
-**Status:** Week 4 complete. Every numbered item of `architecture.md` Part I is
-now **DONE** — §10's calibration applied, §11's nine tiles computed from stored
-rows, §13's explanation surfaces built deterministically, §14's second pattern
-tested. What remains is listed in §W4.6 and none of it is a Part I item.
-**Verified against:** PostgreSQL 16 (docker-compose), 215 tests green.
+**Status:** Week 5 complete. The system now has a write path, a publish step, an
+arrival door that can stop a charge, a scheduler, and a console in a browser.
+Every numbered item of `architecture.md` Part I has been **DONE** since Week 4.
+**Verified against:** PostgreSQL 16 (docker-compose), **454 Python tests and 40
+console tests green**, `alert.v1`'s digest unmoved since Week 2.
 
-**Next:** [`WEEK5-PLAN.md`](WEEK5-PLAN.md) — roles, dispositions, the three
-simulation endpoints, admin rule authoring with a real publish step, and the
-React console. Five sessions, and it is a living document: sessions update it as
-they go, and it folds into this file as §W5 when Week 5 completes.
+**Next:** there is no Week 6 plan. What is worth doing next is in §W5.7, and the
+first item is not a feature: **there is still no CI**, and there are now two
+suites and two package managers that only run when a human runs them.
 
 Newest week first. Each week's account is left as it was written; where a later
 week moved something, the later account says so rather than editing the earlier
 one.
+
+---
+
+# Week 5 — roles, dispositions, simulation, rule authoring, arrival, console
+
+Six sessions rather than five: session 4b was not in the plan and was asked for
+after session 4 landed, on a premise worth recording verbatim — *"if we can't
+demo a detected fraudulent transaction, and there is no engine running, what is
+the purpose of all of this?"* Half of that was wrong and the other half was
+worse than stated. `bootstrap.ps1` did detect fraud end to end; what nothing
+could do was **react** or **prevent**.
+
+`WEEK5-PLAN.md` is the session-by-session record, and it is superseded by this
+section. It keeps the open questions, the forty-three decisions taken along the
+way, and the twelve defects found while taking them.
+
+## W5.1 What changed, in one paragraph each
+
+**Session 1 — the first write path in the project's history.** An authenticated
+analyst can mark a case, and `POST /simulate/subject` re-derives a decision
+without persisting it. `case_outcomes.source` (migration `0029`) is what makes a
+disposition's provenance recoverable, and it turned out to be load-bearing twice:
+three KPI tiles derive their caveat from it, and the queue filters on it, because
+`resolve_actions.py` dispositions every open case in one synthetic pass and a
+queue keyed on "has any disposition" would be empty after a normal bootstrap.
+Closes **D3**.
+
+**Session 2 — an authored rule has something to fail against.** `rules/validate.py`
+rejects twenty-two shapes, every one of which previously produced a rule that did
+*nothing* rather than a rule that failed — `conditions.fires()` returns False for
+an operator it does not recognise, so a typo yielded a rule that never fired,
+never errored, and appeared in the ledger as a condition that simply never
+matched. `POST /simulate/rule` applies a candidate to real history inside a scope
+that rolls back. Closes **D4**, answers **O1**, finds and guards **D7**.
+
+**Session 3 — publishing, and the shadow gate, together.** A rule is published,
+not saved: the definition is written, snapshotted into `rule_versions` with the
+actor, and landed in **shadow**, where it is scored on every applicable subject
+and acts on nobody. The version counter moves only when the definition moves.
+Closes **D1** and **D2**, answers **O3**, finds **D8** and **D9**.
+
+**Session 4 — a charge that never happened.** `POST /simulate/transaction`
+inserts a fabricated row, runs a feature pass scoped to the instant it claims to
+have occurred at, evaluates it and rolls all three back. The pass is what makes
+the answer new rather than borrowed. Answers **O4**: admin only.
+
+**Session 4b — arrival, prevention, and the scheduler.** `POST /authorize`
+decides a charge *before the row is committed*, so a declined charge is never an
+approved transaction; `POST /ingest/{transactions,events,links}` takes settled
+rows, which is the only way to reach L-203 and S-077; `glassbox serve` runs the
+cycle on an interval. Answers §18's decision 6 at 30 seconds. Finds and fixes
+**D10** — the cluster builder handed the second cluster the first one's id,
+unreachable for four weeks because the fixtures build exactly one cluster.
+
+**Session 5 — the console.** `console/`: Vite, React, 24 modules, 40 tests,
+bound to nine published contracts and asserting nothing they do not say. Answers
+**D6** by routing around it, finds **D11** and **D12**.
+
+## W5.2 The console, and the four claims it had to keep
+
+The console is the first surface in this project that a person judges by looking
+rather than by reading a payload, which makes it the easiest place to break a
+guarantee the server spent five weeks enforcing. Four of them are enforced in
+`console/src/console.test.ts` as checks on the source itself, in the same spirit
+as the DDL hook and the cursor hook.
+
+**One bar, three payloads.** `AlertDetail`, `SimulatedDecision` and
+`AuthorizationOutcome` carry `Signal`, `Action` and `Evidence` unmodified and
+deliberately (decision 8), so one component renders a stored alert, a what-if and
+a live authorization. A second bar is the failure mode `persist.ranked_signals`
+was made public to prevent (decision 13), moved up a layer where the server's
+tests cannot see it — so a test asserts `bar-seg` appears in exactly one file.
+
+**The bar adds up exactly, and the console had to work for it.** Pydantic
+serialises `Decimal` as a *string*, which is precisely what lets
+`contract/models.py` check `sum(signals) == score` with `==` and no tolerance.
+Parsing those into JavaScript numbers to add them would hand the guarantee back:
+`0.1 + 0.2 !== 0.3`, and a repriced condition is one seed file away from putting
+a fractional contribution on a bar. `format.ts` sums them as scaled integers
+(decision 39). Same argument `queue.py` makes about publishing rounded factors —
+an explanation that is approximately true is the standard §1 refuses.
+
+**`persisted` decides the frame, and it beats everything else.** The plan's
+criterion is that a simulated decision and a real one are *never visually
+confusable*: same bar, different frame. The frame is read off the payload's own
+field rather than from which screen is rendering, because `/simulate/*` publishes
+`persisted: false` on the wire exactly so a caller does not infer it from the
+URL. Decision 40 is the sharp edge of it — a rolled-back decision that *would*
+have declined a charge must never carry the frame that means money did not move,
+so `persisted` wins in the direction that claims less.
+
+**Nothing asserts liveness, and there are three answers, not two.** Whether the
+engine is running comes from `GET /cycle`. Running, not running, and *we could
+not ask* — `/cycle` needs a token, so a signed-out console genuinely does not
+know. The third answer is the one worth having: it is also what the strip says
+when the service is unreachable, which is the moment a console is most tempted to
+keep showing the last cheerful thing it heard.
+
+## W5.3 D6, and why the answer is "leave it alone"
+
+The nine files under `contract/` contain dangling `$ref`s, and have since Week 2:
+`export_contract_schema.py` asks Pydantic for `ref_template="#/$defs/{model}"`,
+which is document-root-absolute, while Pydantic nests the referenced definitions
+under each model's own `$defs`. Harmless until something tries to *resolve* a
+`$ref` — which is what a TypeScript generator does.
+
+The plan named three honest options and said to choose in the plan rather than in
+a build script. The choice is the third: **generate the client from the OpenAPI
+document, and leave the published schemas as the frozen artifacts they are.**
+
+Fixing the exporter would move `alert.v1`'s pinned digest, which is the deliberate
+act the pin exists to force — and spending the project's single most load-bearing
+signal on `$ref` plumbing is not what it is for. `alert.v2` would spend a version
+number on the same. FastAPI's document hoists every model into
+`components.schemas`, so every reference resolves without a byte of the frozen
+files being touched, and it is derived from the ROUTES, which is what the console
+actually calls.
+
+`scripts/export_openapi.py` writes it **offline** from the app object — no server,
+no database — and `tests/test_openapi.py` holds three things: the committed copy
+is current, every published contract is reachable from some route, and nothing
+dangles. That last one is asserted rather than assumed, because if it ever stopped
+being true, generating from here would silently produce the same broken output.
+
+**D6 stays open.** Nothing here fixes the published schemas. It routes around
+them, and the day somebody wants them resolvable, that work is still waiting.
+
+## W5.4 What you can run right now
+
+```powershell
+.\scripts\bootstrap.ps1        # ~5 min cold, 454 tests
+```
+
+```bash
+python -m glassbox serve                      # API on :8000, cycle every 30s
+python scripts/demo_burst.py --http           # five charges; the fifth is declined
+
+cd console
+npm install && npm run dev                    # :5173, proxying /api -> :8000
+npm test                                      # 40 tests
+npm run build                                 # -> served at :8000/console
+```
+
+Sign in with `analyst-token` or `admin-token`. Reads are open, so the queue, a
+case and the KPI tiles render before you do.
+
+**Set `GLASSBOX_CYCLE_SECONDS` deliberately for console work.** The default 30
+means rows appear that no click caused, which is correct for a demo and
+confusing while building a queue screen. `0` disables it, which is what the test
+suite sets — and the console will tell you which you picked, off `/cycle`.
+
+The five signed-off scores are unmoved through the whole week:
+
+| Subject | Rules | Score | Band | Action |
+|---|---|---:|---|---|
+| `TXN-48291` | R-114 | **87** | high | `challenge` |
+| `TXN-48300` | R-114 + T-021 | **68** | elevated | `monitor` |
+| `RING-1187` | L-203 | **64** | elevated | `hold` |
+| `ACC-2201` | S-077 | **58** | elevated | `hold` |
+| `TXN-48251` | T-021 | **0** | low | `allow` |
+
+## W5.5 Two defects worth knowing about, found in session 5
+
+**D11 — `bootstrap.ps1` died on a healthy bring-up.** `docker compose up -d`
+writes `level=warning msg="No services to build"` to stderr, and under
+`$ErrorActionPreference = 'Stop'` a native command writing anything to stderr
+becomes a terminating `NativeCommandError`. So the container started, Postgres
+came up healthy, and the script threw. The file already guards the `docker info`
+poll against exactly this and explains why in a comment; the `docker compose`
+line two dozen lines below never got the same treatment. **Fixed**, and it only
+ever fired on a cold start — which is the honest reason four weeks of
+`-SkipDocker` runs never hit it.
+
+**D12 — every collection field in every published contract is optional in its
+schema.** Pydantic marks a field with a `default_factory` as not-required, so
+`alert.v1`'s `required` list is nine names and `signals` is not among them. The
+server always sends it; a client generated from the schema is nonetheless
+correctly typed `Signal[] | undefined` for a field that is never absent. **Open,
+and it cannot be fixed without unfreezing** — making those fields required
+changes the model, which changes `alert.v1`'s bytes and its digest. That is a
+genuine `alert.v2` decision, not a typing convenience. The console defaults each
+one to the same empty value the server would have sent, and says so where it
+does; asserting presence would be a client deciding it knows better than the
+contract it binds to.
+
+## W5.6 Three things to know before changing the console
+
+1. **`src/api/types.ts` contains no hand-written payload shape except one.**
+   Every export is an alias into the generated `schema.d.ts`. The exception is
+   `CycleState`, because `GET /cycle` has no `response_model` and OpenAPI can
+   only type it as an open object — and a test pins that it stays the only one.
+   If you find yourself typing `interface Signal`, the import is three levels
+   deep and that is not a reason.
+2. **Regenerate both files together.** `python scripts/export_openapi.py`, then
+   `npm run types`, then commit both. `test_openapi.py` fails if the document is
+   stale, which is the tripwire — without it a route whose `response_model`
+   changed leaves the console typechecking green against a shape the service no
+   longer serves.
+3. **The §11 copy scan means the flagged strings cannot appear anywhere in
+   `console/src`, including in a comment explaining them.** That is not
+   over-reach; it is what makes the test real. `screens/Alert.tsx` paraphrases
+   and says why — a test its own subject can defeat by citing it is not a test.
+
+## W5.7 What is deliberately not done
+
+- **There is no CI, and this is now the largest gap in the project.** No
+  `.github/` at all. The digest freeze, the DDL hook, the cursor hook, the
+  `ON CONFLICT` grep, the console's source scans — every enforcement mechanism
+  the project's claims rest on runs only when a human runs it, and there are now
+  two suites and two package managers. `requirements.txt` pins nothing and has no
+  lockfile; `console/package.json` pins exactly and commits one (decision 43), so
+  the two halves of the repository now disagree about reproducibility. A Postgres
+  service container plus `pytest` plus `npm test` is roughly thirty lines.
+- **A stopped charge still has no second act.** Nothing answers a step-up, so
+  the demo shows a charge being declined and never one being released after the
+  customer authenticates.
+- **`D8` and `D9` are still open**, both with reasons in `WEEK5-PLAN.md`: an edit
+  cascades away its own condition ledger, and `v_condition_performance` pools
+  shadow firings with live ones.
+- **The `sequence` source kind**, and with it the last hand-seeded feature value.
+- **The batch/incremental consistency test.**
+- **No error boundary in the console.** One that swallowed a `ContractViolation`
+  would hide the single failure this system most wants to be loud.
+
+## W5.8 Ledger against `architecture.md`
+
+Unchanged from Week 4 — every numbered item of Part I is **DONE**, and Week 5
+added nothing to that list because Week 5 was not a Part I week. What it changed
+is the two things §15 and §18 described and no code had ever done: the topology's
+third component now exists (`scheduler.py`), and the console and admin authoring
+that four handoffs called "out of scope by decision" are built.
+
+| Named in `architecture.md`, previously unbuilt | Status |
+|---|---|
+| §15's scheduler | **DONE** (session 4b) — `GLASSBOX_CYCLE_SECONDS`, default 30 |
+| The console and admin authoring | **DONE** (sessions 2, 3, 5) |
+| §11's "console copy that outruns the system" | **DONE** — neither string was ever written, and a source scan keeps it that way |
+| §18 decision 6, the async cycle period | **ANSWERED** at 30 seconds, labelled a demo number |
+| Part II: `rule_versions`, `feature_catalog_versions` | **POPULATED** (session 3) — they were empty through Weeks 2–4 |
+| Part II: `source_model` on `alert_signals` | still never written, correctly — there is no model |
 
 ---
 

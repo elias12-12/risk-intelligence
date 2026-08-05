@@ -46,7 +46,18 @@ if (-not $SkipDocker) {
         $ErrorActionPreference = $oldErrorAction
         if (-not $up) { throw 'Docker did not become ready within three minutes.' }
     }
+    # Same trap as the `docker info` poll above, and it bit for real: under
+    # ErrorActionPreference='Stop' a native command writing ANYTHING to stderr
+    # becomes a terminating NativeCommandError, and `docker compose up -d` emits
+    # `level=warning msg="No services to build"` on a perfectly healthy bring-up.
+    # The container starts and the script dies. Check the exit code, which is
+    # the only thing that actually reports failure here.
+    $ErrorActionPreference = 'Continue'
     docker compose up -d
+    $composeOk = ($LASTEXITCODE -eq 0)
+    $ErrorActionPreference = $oldErrorAction
+    if (-not $composeOk) { throw "docker compose up -d failed with exit code $LASTEXITCODE." }
+
     Write-Host 'waiting for Postgres to accept connections...'
     $deadline = (Get-Date).AddMinutes(2)
     do {
@@ -123,4 +134,14 @@ step-up. Nothing about it was in the fixtures.
 
   python scripts/demo_burst.py                                  ingest.v1, end to end
   python scripts/demo_burst.py --http                           through the running API
+
+The same thing in a browser. Not run here, because it needs Node and this
+script's promise is a demoable database in three minutes:
+
+  cd console; npm install; npm run dev                          :5173, proxying /api
+  npm test                                                      40 tests
+  npm run build                                                 served at :8000/console
+
+Sign in with analyst-token or admin-token. Set GLASSBOX_CYCLE_SECONDS
+deliberately first: the default 30 makes rows appear that no click caused.
 '@ -ForegroundColor Green

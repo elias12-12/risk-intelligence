@@ -1,0 +1,35 @@
+{
+  "name": "glassbox-console",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "The analyst and admin console. Binds to the published contracts and asserts nothing they do not.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "types": "openapi-typescript src/api/openapi.json -o src/api/schema.d.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "//pins": "Exact, and package-lock.json is committed. WEEK5-PLAN flags that requirements.txt pins nothing and there is no lockfile, so a reproducible bootstrap is one upstream release away from a red suite that has nothing to do with the code. The console does not repeat that.",
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-router-dom": "7.18.2"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.3",
+    "@types/node": "26.1.2",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "4.7.0",
+    "jsdom": "26.1.0",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3",
+    "vite": "6.4.3",
+    "vitest": "3.2.7"
+  }
+}

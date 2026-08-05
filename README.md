@@ -53,7 +53,7 @@ python scripts/kpi_report.py                # the nine tiles
 python scripts/case_report.py --alert 5 --citations   # a filing draft, sourced
 
 psql "$GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   # 87 / 68 / 64 / 58 / 0
-pytest                                                    # 443 tests
+pytest                                                    # 454 tests
 python -m glassbox serve                                  # API on :8000, cycle every 30s
 ```
 
@@ -65,6 +65,19 @@ python scripts/demo_burst.py                # five charges; the fifth is decline
 python scripts/demo_burst.py --http         # the same, through a running service
 python scripts/demo_burst.py --clean        # take it back out
 ```
+
+And the same thing in a browser:
+
+```bash
+cd console
+npm install
+npm run dev              # :5173, proxying /api -> :8000; 40 tests via `npm test`
+npm run build            # -> served same-origin at :8000/console
+```
+
+Sign in with `analyst-token` or `admin-token`. Reads are open, so the queue, a
+case and the KPI tiles render before you do. See
+[console/README.md](console/README.md) for what the console holds itself to.
 
 `verify_scores.sql` keeps its psql meta-commands and must be run with `psql`
 from the repository root. That is deliberate: two execution paths, `psql` for
@@ -193,6 +206,21 @@ src/glassbox/
               routes_rules.py  author, edit, promote, retire — admin only
               routes_ingest.py /authorize, /ingest/*, /cycle — admin only
               auth.py       two demo users; reads open, writes not
+              app.py        …and it serves console/dist at /console
+
+console/
+  src/api/    openapi.json  generated offline from the app; committed
+              schema.d.ts   generated from that; committed
+              types.ts      aliases into it, and one hand-written shape
+              client.ts     the only place this console talks to the service
+  components/ ScoreBar.tsx      the one bar, rendering three payloads
+              DecisionFrame.tsx `persisted` is what makes them unconfusable
+              SystemStrip.tsx   the only thing that says whether anything runs
+              Tile.tsx          a KPI tile, with no copy of its own
+  screens/    Queue, Alert, Kpis, Rules, RuleDetail, RuleAuthor, Simulate,
+              Authorize — the last of which commits, and says so first
+  format.ts   exact arithmetic over the Decimal strings the API sends
+  console.test.ts  the claims no render can prove, checked against the source
 ```
 
 The pipeline order, in one line each:
@@ -479,6 +507,26 @@ novelty (`baseline_lag`), cannot move a graph feature, cannot carry a
 It is **admin-only**: every other defence here is on the payload, and the role
 is the one that does not depend on anyone reading it.
 
+**The console asserts nothing the payload does not say, and four of its claims
+are checked against its own source.** It is the first surface here that a person
+judges by looking rather than by reading a payload, which makes it the easiest
+place to break a guarantee the rest of the system spent five weeks enforcing. So:
+one score-bar component renders `alert.v1`, `simulation.v1` and `ingest.v1`, and
+a test asserts there is exactly one of it — a second bar is the failure mode
+`persist.ranked_signals` was made public to prevent, moved somewhere the server's
+tests cannot see. The bar sums the contributions as **scaled integers**, because
+Pydantic sends `Decimal` as a string and parsing those into floats to add them up
+would hand back the exactness `sum(signals) == score` depends on. `persisted` is
+what decides the frame around a decision, read off the payload rather than off
+which screen is rendering, and it beats `stopped` — a rolled-back decision that
+*would* have declined a charge never carries the frame that means money did not
+move. Whether the engine is running comes from `GET /cycle` and nowhere else,
+with three answers rather than two: running, not running, and *could not ask*.
+And `POST /authorize` — the one endpoint that commits and can decline a charge —
+has exactly one call site, so the console cannot quietly use it to answer a
+hypothetical. That is what `/simulate/transaction` is for, and they are separate
+endpoints precisely so a typo cannot turn one into the other.
+
 ---
 
 ## Extending it: what costs rows, and what costs code
@@ -520,8 +568,10 @@ and it is worth saying so out loud.
 ## Tests
 
 ```bash
-pytest                       # 393 tests, ~125s including a full rebuild
+pytest                       # 454 tests, ~120s including a full rebuild
 pytest tests/test_degraded.py -v
+
+cd console && npm test       # 40 tests, ~3s
 ```
 
 Tests use the same docker-compose PostgreSQL, in a dedicated `glassbox_test`
@@ -564,6 +614,18 @@ a test that mutates rules or catalog rows cannot leak.
 | `test_ingest.py` | Week 5 — three doors, retries that are not errors, and the phantom edge no foreign key would catch |
 | `test_cycle.py` | Week 5 — a tick that reacts, a tick that costs nothing, and the narrowing that makes an interval possible |
 | `test_shadow.py` | Week 5 — a shadow rule contributes nothing and records everything, including the veto it is not allowed to cast |
+| `test_openapi.py` | Week 5 — the document the console's types come from is current, every contract is reachable from a route, and nothing dangles |
+
+And the console's own, which check what a server-side test cannot see:
+
+| Module | Covers |
+|---|---|
+| `format.test.ts` | the bar sums exactly, where a float sum would not |
+| `ScoreBar.test.tsx` | the arithmetic on screen, a payload that does not add up, and that no mitigator is ever hidden |
+| `DecisionFrame.test.tsx` | `persisted` decides the frame — and beats `stopped`, so a rolled-back decline never reads as a real one |
+| `Tile.test.tsx` | tile copy comes off the payload; no delta without its baseline window; an absent value is an absence, not a zero |
+| `SystemStrip.test.tsx` | three answers about liveness, including "could not ask" |
+| `console.test.ts` | one bar, one `/authorize` call site, one source of liveness, no redeclared payload shapes, none of the copy §11 flags |
 
 ---
 
@@ -686,10 +748,31 @@ for the same reason.
   feature pass inside the measurement. That is a number you can now argue with,
   which is more than it was, and it is not a throughput claim.
 - **Still deferred:** the `sequence` source kind, which would delete the last
-  hand-seeded feature value; and the batch/incremental consistency test. The
-  console is out of scope; the admin write endpoints it would bind to are built.
+  hand-seeded feature value; and the batch/incremental consistency test.
   §15's "one service, one database, a scheduler" is now all three, and §18's
   decision 6 is answered at 30 seconds — a demo number, not a production one.
+  The console is built and no longer deferred.
+- **The published contract schemas contain dangling `$ref`s, and still do.**
+  `export_contract_schema.py` uses a document-root-absolute `ref_template` while
+  Pydantic nests `$defs` per model, so `#/$defs/Signal` in `alert.v1` resolves to
+  nothing. True since Week 2 and harmless until something tries to resolve one —
+  which is what a TypeScript generator does. The console is therefore generated
+  from the **OpenAPI document** (`scripts/export_openapi.py`), where FastAPI
+  hoists every model into `components.schemas`; `alert.v1`'s digest never comes
+  near a build tool. That routes around the problem rather than fixing it, and
+  fixing it is a choice between `alert.v2` and re-pinning the digest.
+- **Every collection field in every published contract is optional in its
+  schema** — `AlertDetail.signals` included, because a `default_factory` makes a
+  Pydantic field not-required. The server always sends them; a generated client
+  is nonetheless correctly typed as though they might be absent, and every
+  consumer must defensively default. It cannot be fixed without changing the
+  models, which would move `alert.v1`'s bytes.
+- **There is still no CI, and it is now the largest gap here.** No `.github/` at
+  all. The digest freeze, the DDL hook, the cursor hook, the `ON CONFLICT` grep
+  and the console's source scans all run only when a human runs them, and there
+  are now two suites and two package managers. `console/package.json` pins
+  exactly and commits a lockfile; `requirements.txt` pins nothing and has none,
+  so the two halves of this repository disagree about reproducibility.
 - **Further defects are recorded in [WEEK5-PLAN.md](WEEK5-PLAN.md)**, none of
   them owned by this list. Closed in session 1: dispositions carry provenance.
   In session 2: an authored rule has something to fail against. In session 3:
@@ -700,8 +783,10 @@ for the same reason.
   cluster builder allocated ids by candidate index, so the second device-fanout
   cluster took `RING-1187` from the first. Unreachable for four weeks because the
   fixtures build exactly one cluster, and reachable the moment links can arrive
-  over HTTP. Still open there: CI does not exist, so every enforcement mechanism
-  the project's claims rest on runs only when a human runs it.
+  over HTTP. Session 5 found **D11** — `bootstrap.ps1` threw on a healthy
+  `docker compose up -d`, because a stderr warning under
+  `ErrorActionPreference = 'Stop'` is a terminating error; fixed, and it only
+  ever fired on a cold start.
 - **A hypothetical charge is scored as a transaction and nothing else.**
   `POST /simulate/transaction` evaluates the fabricated row in one lane, as a
   `transaction` subject. The card, account, customer and merchant it references

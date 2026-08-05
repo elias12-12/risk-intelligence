@@ -1,0 +1,6521 @@
+{
+  "components": {
+    "schemas": {
+      "Action": {
+        "additionalProperties": false,
+        "properties": {
+          "clear_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clear Text"
+          },
+          "prevent_threshold_met": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prevent Threshold Met"
+          },
+          "recommended_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Text"
+          },
+          "source_rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Rule"
+          },
+          "taken": {
+            "title": "Taken",
+            "type": "string"
+          },
+          "vetoed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vetoed By"
+          }
+        },
+        "required": [
+          "taken"
+        ],
+        "title": "Action",
+        "type": "object"
+      },
+      "ActionValue": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "is_preventive": {
+            "title": "Is Preventive",
+            "type": "boolean"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "action",
+          "severity",
+          "is_preventive"
+        ],
+        "title": "ActionValue",
+        "type": "object"
+      },
+      "AlertDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/Action"
+          },
+          "alert_id": {
+            "title": "Alert Id",
+            "type": "integer"
+          },
+          "band": {
+            "title": "Band",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision_id": {
+            "title": "Decision Id",
+            "type": "integer"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "execution_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Mode"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "rules_fired": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rules Fired",
+            "type": "array"
+          },
+          "score": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Score",
+            "type": "string"
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/Signal"
+            },
+            "title": "Signals",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/Subject"
+          },
+          "subjects": {
+            "items": {
+              "$ref": "#/components/schemas/Subject"
+            },
+            "title": "Subjects",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alert_id",
+          "decision_id",
+          "subject",
+          "title",
+          "score",
+          "band",
+          "status",
+          "action",
+          "evidence"
+        ],
+        "title": "AlertDetail",
+        "type": "object"
+      },
+      "AlertSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "action_taken": {
+            "title": "Action Taken",
+            "type": "string"
+          },
+          "alert_id": {
+            "title": "Alert Id",
+            "type": "integer"
+          },
+          "band": {
+            "title": "Band",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dedup_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dedup Key"
+          },
+          "score": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Score",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/Subject"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alert_id",
+          "subject",
+          "title",
+          "score",
+          "band",
+          "status",
+          "action_taken",
+          "created_at"
+        ],
+        "title": "AlertSummary",
+        "type": "object"
+      },
+      "AuthorizationOutcome": {
+        "additionalProperties": false,
+        "description": "What the engine did with a charge that asked to be approved.\n\n`persisted` is `True` and stated, the mirror of `simulation.v1`'s literal\n`false`. The two surfaces are deliberately shaped alike so a console can\nrender either \u2014 and deliberately not interchangeable, because the guarantee\neach carries is the opposite one.",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/Action"
+          },
+          "alert_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert Id"
+          },
+          "alert_routing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert Routing"
+          },
+          "authorization": {
+            "enum": [
+              "approved",
+              "declined"
+            ],
+            "title": "Authorization",
+            "type": "string"
+          },
+          "band": {
+            "title": "Band",
+            "type": "string"
+          },
+          "basis": {
+            "default": "The inline lane, run synchronously in this request: the charge was written, the features an arriving transaction drives were recomputed at its instant, the rules were evaluated, precedence chose an action, and the row was committed carrying the auth_result that action implies. Everything here is STORED \u2014 this is not a simulation.",
+            "title": "Basis",
+            "type": "string"
+          },
+          "decision_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Id"
+          },
+          "decline_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decline Reason"
+          },
+          "device_registered": {
+            "default": false,
+            "title": "Device Registered",
+            "type": "boolean"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "executions": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionIssued"
+            },
+            "title": "Executions",
+            "type": "array"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "persisted": {
+            "const": true,
+            "default": true,
+            "title": "Persisted",
+            "type": "boolean"
+          },
+          "score": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Score",
+            "type": "string"
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/Signal"
+            },
+            "title": "Signals",
+            "type": "array"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/Subject"
+          },
+          "txn_id": {
+            "title": "Txn Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "txn_id",
+          "subject",
+          "occurred_at",
+          "authorization",
+          "score",
+          "band",
+          "action",
+          "evidence"
+        ],
+        "title": "AuthorizationOutcome",
+        "type": "object"
+      },
+      "AuthorizationRequest": {
+        "additionalProperties": false,
+        "description": "A charge asking to be approved.\n\n`auth_result` and `decline_reason` are deliberately absent. The engine\ndecides them, the row is written carrying the decision, and raw capture is\nappend-only \u2014 so there is no moment at which this charge existed as an\napproved transaction and was then downgraded.",
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Amount"
+          },
+          "amount_base": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Base"
+          },
+          "billing_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billing Country"
+          },
+          "card_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Id"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "counterparty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "customer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Id"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "entry_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Mode"
+          },
+          "ip_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Address"
+          },
+          "mcc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mcc"
+          },
+          "merchant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant Id"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "payee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payee Id"
+          },
+          "shipping_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipping Country"
+          },
+          "txn_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Country"
+          },
+          "txn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Id"
+          },
+          "txn_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Lat"
+          },
+          "txn_lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Lon"
+          },
+          "txn_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Type"
+          }
+        },
+        "required": [
+          "amount"
+        ],
+        "title": "AuthorizationRequest",
+        "type": "object"
+      },
+      "CaseReport": {
+        "additionalProperties": false,
+        "properties": {
+          "alert_id": {
+            "title": "Alert Id",
+            "type": "integer"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "draft": {
+            "default": true,
+            "title": "Draft",
+            "type": "boolean"
+          },
+          "draft_notice": {
+            "default": "DRAFT \u2014 generated from stored rows. An analyst must review this before it is filed. Nothing in it has been checked against anything outside this case.",
+            "title": "Draft Notice",
+            "type": "string"
+          },
+          "generated_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated From"
+          },
+          "markdown": {
+            "title": "Markdown",
+            "type": "string"
+          },
+          "method": {
+            "default": "Deterministic templating over stored rows. No language model is involved in any field of this payload; every number is quoted from the citation beside it and every derived number names its formula.",
+            "title": "Method",
+            "type": "string"
+          },
+          "model_backed": {
+            "default": false,
+            "title": "Model Backed",
+            "type": "boolean"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "subject_type": {
+            "title": "Subject Type",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unresolvable_versions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolvable Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "alert_id",
+          "title",
+          "subject_type",
+          "subject_id",
+          "markdown"
+        ],
+        "title": "CaseReport",
+        "type": "object"
+      },
+      "CaseVerdict": {
+        "additionalProperties": false,
+        "description": "The state of one case's disposition, and every row behind it.\n\n`verdict` is what the KPI views count; `history` is why it says that. A\nsurface that showed only the verdict would hide a correction, which is the\none thing an append-only table exists to preserve.",
+        "properties": {
+          "alert_id": {
+            "title": "Alert Id",
+            "type": "integer"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "dispositions": {
+            "default": 0,
+            "title": "Dispositions",
+            "type": "integer"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/Disposition"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "enum": [
+                  "confirmed_fraud",
+                  "false_positive",
+                  "confirmed_legit",
+                  "inconclusive"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "verdict_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "analyst",
+                  "synthetic"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict Source"
+          },
+          "worked_by_analyst": {
+            "default": false,
+            "title": "Worked By Analyst",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "alert_id"
+        ],
+        "title": "CaseVerdict",
+        "type": "object"
+      },
+      "Citation": {
+        "additionalProperties": false,
+        "description": "Where one quoted value came from.\n\n`source='derived'` is not a cheat: it is how arithmetic declares itself. The\nformula goes in `key`, so a reader can recompute it from the other citations\nwithout trusting this one.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "source",
+          "key",
+          "value"
+        ],
+        "title": "Citation",
+        "type": "object"
+      },
+      "ConditionDraft": {
+        "additionalProperties": false,
+        "description": "One condition as an admin authors it. An INPUT model, not part of the\npublished read shape \u2014 but kept here so the pair is read together, exactly as\n`SimulationRequest` sits beside `SimulatedDecision`.\n\nEvery field is typed loosely on purpose. The vocabularies live in `ref_*`\nrows and in the interpreter's own operator tuple, so a Pydantic `Literal`\nhere would be a THIRD copy that drifts the moment somebody INSERTs a reason\ncode. `rules/validate.py` is where a value is checked, against the rows.",
+        "properties": {
+          "condition_group": {
+            "default": 1,
+            "title": "Condition Group",
+            "type": "integer"
+          },
+          "contribution_points": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Contribution Points"
+          },
+          "feature_key": {
+            "title": "Feature Key",
+            "type": "string"
+          },
+          "is_required": {
+            "default": true,
+            "title": "Is Required",
+            "type": "boolean"
+          },
+          "operator": {
+            "title": "Operator",
+            "type": "string"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "signal_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signal Template"
+          },
+          "threshold_num": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Num"
+          },
+          "threshold_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Text"
+          }
+        },
+        "required": [
+          "feature_key",
+          "operator",
+          "contribution_points"
+        ],
+        "title": "ConditionDraft",
+        "type": "object"
+      },
+      "ConditionOutcomeSummary": {
+        "additionalProperties": false,
+        "description": "One condition of the candidate, measured over the sample.\n\nThe stored `condition_id` is deliberately absent: a draft's conditions are\ninserted inside the rolled-back scope, so their ids are real for the length\nof one transaction and mean nothing afterwards. Publishing one would be\npublishing a key that resolves to a different row, or to none.",
+        "properties": {
+          "condition_group": {
+            "title": "Condition Group",
+            "type": "integer"
+          },
+          "contribution_points": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Contribution Points",
+            "type": "string"
+          },
+          "degraded": {
+            "default": 0,
+            "title": "Degraded",
+            "type": "integer"
+          },
+          "direction": {
+            "title": "Direction",
+            "type": "string"
+          },
+          "evaluated": {
+            "default": 0,
+            "title": "Evaluated",
+            "type": "integer"
+          },
+          "feature_key": {
+            "title": "Feature Key",
+            "type": "string"
+          },
+          "fire_rate_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fire Rate Pct"
+          },
+          "fired": {
+            "default": 0,
+            "title": "Fired",
+            "type": "integer"
+          },
+          "fired_labelled": {
+            "default": 0,
+            "title": "Fired Labelled",
+            "type": "integer"
+          },
+          "fired_on_fraud": {
+            "default": 0,
+            "title": "Fired On Fraud",
+            "type": "integer"
+          },
+          "is_required": {
+            "default": true,
+            "title": "Is Required",
+            "type": "boolean"
+          },
+          "operator": {
+            "title": "Operator",
+            "type": "string"
+          },
+          "precision_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precision Pct"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          }
+        },
+        "required": [
+          "condition_group",
+          "feature_key",
+          "operator",
+          "contribution_points",
+          "direction"
+        ],
+        "title": "ConditionOutcomeSummary",
+        "type": "object"
+      },
+      "ConditionPerformance": {
+        "additionalProperties": false,
+        "description": "What a condition actually did, as opposed to what it was priced at.",
+        "properties": {
+          "alert_precision_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert Precision Pct"
+          },
+          "basis": {
+            "default": "v_condition_performance over decision_conditions: every condition of every applicable rule, fired or not. precision_pct is direction-aware \u2014 the fraud rate for an aggravator, the legitimate rate for a mitigator \u2014 measured against transactions.synthetic_label, which is exact on this dataset and meaningless outside it. points_per_precision_point is what the catalog charges per unit of measured precision, and HIGH IS BAD.",
+            "title": "Basis",
+            "type": "string"
+          },
+          "degraded": {
+            "title": "Degraded",
+            "type": "integer"
+          },
+          "evaluated": {
+            "title": "Evaluated",
+            "type": "integer"
+          },
+          "fire_rate_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fire Rate Pct"
+          },
+          "fired": {
+            "title": "Fired",
+            "type": "integer"
+          },
+          "fired_labelled": {
+            "default": 0,
+            "title": "Fired Labelled",
+            "type": "integer"
+          },
+          "fired_on_cases": {
+            "default": 0,
+            "title": "Fired On Cases",
+            "type": "integer"
+          },
+          "fired_on_fraud": {
+            "default": 0,
+            "title": "Fired On Fraud",
+            "type": "integer"
+          },
+          "mean_contribution": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Contribution"
+          },
+          "points_per_precision_point": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points Per Precision Point"
+          },
+          "precision_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precision Pct"
+          }
+        },
+        "required": [
+          "evaluated",
+          "fired",
+          "degraded"
+        ],
+        "title": "ConditionPerformance",
+        "type": "object"
+      },
+      "ConditionView": {
+        "additionalProperties": false,
+        "properties": {
+          "condition_group": {
+            "title": "Condition Group",
+            "type": "integer"
+          },
+          "condition_id": {
+            "title": "Condition Id",
+            "type": "integer"
+          },
+          "contribution_points": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Contribution Points",
+            "type": "string"
+          },
+          "direction": {
+            "title": "Direction",
+            "type": "string"
+          },
+          "feature_key": {
+            "title": "Feature Key",
+            "type": "string"
+          },
+          "is_required": {
+            "default": true,
+            "title": "Is Required",
+            "type": "boolean"
+          },
+          "operator": {
+            "title": "Operator",
+            "type": "string"
+          },
+          "performance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConditionPerformance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "performance_absent_because": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Performance Absent Because"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "signal_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signal Template"
+          },
+          "threshold_num": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Num"
+          },
+          "threshold_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Text"
+          }
+        },
+        "required": [
+          "condition_id",
+          "rule_id",
+          "condition_group",
+          "feature_key",
+          "operator",
+          "contribution_points",
+          "direction"
+        ],
+        "title": "ConditionView",
+        "type": "object"
+      },
+      "CopilotAnswer": {
+        "additionalProperties": false,
+        "properties": {
+          "chip": {
+            "enum": [
+              "why_flagged",
+              "what_would_clear_it",
+              "what_should_i_do_first"
+            ],
+            "title": "Chip",
+            "type": "string"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "mitigating_cited": {
+            "default": 0,
+            "title": "Mitigating Cited",
+            "type": "integer"
+          },
+          "mitigating_total": {
+            "default": 0,
+            "title": "Mitigating Total",
+            "type": "integer"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "score_quoted": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Quoted"
+          },
+          "signals_total": {
+            "default": 0,
+            "title": "Signals Total",
+            "type": "integer"
+          },
+          "veto_cited": {
+            "default": 0,
+            "title": "Veto Cited",
+            "type": "integer"
+          },
+          "veto_total": {
+            "default": 0,
+            "title": "Veto Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chip",
+          "question",
+          "lines"
+        ],
+        "title": "CopilotAnswer",
+        "type": "object"
+      },
+      "CopilotResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "alert_id": {
+            "title": "Alert Id",
+            "type": "integer"
+          },
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/CopilotAnswer"
+            },
+            "title": "Answers",
+            "type": "array"
+          },
+          "method": {
+            "default": "Deterministic templating over stored rows. No language model is involved in any field of this payload; every number is quoted from the citation beside it and every derived number names its formula.",
+            "title": "Method",
+            "type": "string"
+          },
+          "model_backed": {
+            "default": false,
+            "title": "Model Backed",
+            "type": "boolean"
+          },
+          "reads": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reads",
+            "type": "array"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "subject_type": {
+            "title": "Subject Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alert_id",
+          "subject_type",
+          "subject_id",
+          "answers"
+        ],
+        "title": "CopilotResponse",
+        "type": "object"
+      },
+      "CycleReport": {
+        "additionalProperties": false,
+        "description": "One turn of the background cycle, published so the console can show that\nsomething is actually running rather than implying it.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "clusters": {
+            "default": 0,
+            "title": "Clusters",
+            "type": "integer"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "feature_values": {
+            "default": 0,
+            "title": "Feature Values",
+            "type": "integer"
+          },
+          "lanes": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "title": "Lanes",
+            "type": "object"
+          },
+          "ran": {
+            "title": "Ran",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          }
+        },
+        "required": [
+          "ran"
+        ],
+        "title": "CycleReport",
+        "type": "object"
+      },
+      "DecisionDiff": {
+        "additionalProperties": false,
+        "description": "A subject whose stored decision and simulated decision disagree.\n\n`stored_*` is null where the subject has no stored decision for this lane \u2014\nwhich is not a change of mind, it is the rule reaching something nothing\nreached before, and `change` says which of the two it is.",
+        "properties": {
+          "change": {
+            "title": "Change",
+            "type": "string"
+          },
+          "simulated_action": {
+            "title": "Simulated Action",
+            "type": "string"
+          },
+          "simulated_score": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Simulated Score",
+            "type": "string"
+          },
+          "simulated_source_rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulated Source Rule"
+          },
+          "stored_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stored Action"
+          },
+          "stored_score": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stored Score"
+          },
+          "stored_source_rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stored Source Rule"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject_id",
+          "change",
+          "simulated_score",
+          "simulated_action"
+        ],
+        "title": "DecisionDiff",
+        "type": "object"
+      },
+      "Disposition": {
+        "additionalProperties": false,
+        "properties": {
+          "alert_id": {
+            "title": "Alert Id",
+            "type": "integer"
+          },
+          "analyst_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analyst Id"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "title": "Decided At",
+            "type": "string"
+          },
+          "disposition": {
+            "enum": [
+              "confirmed_fraud",
+              "false_positive",
+              "confirmed_legit",
+              "inconclusive"
+            ],
+            "title": "Disposition",
+            "type": "string"
+          },
+          "feeds_retrain": {
+            "default": true,
+            "title": "Feeds Retrain",
+            "type": "boolean"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "outcome_id": {
+            "title": "Outcome Id",
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "analyst",
+              "synthetic"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome_id",
+          "alert_id",
+          "disposition",
+          "source",
+          "decided_at"
+        ],
+        "title": "Disposition",
+        "type": "object"
+      },
+      "DispositionRequest": {
+        "additionalProperties": false,
+        "description": "What an analyst sends. `analyst_id` is deliberately absent: it comes from\nthe authenticated principal, never from the body, or the audit column records\nwhoever the caller claimed to be.",
+        "properties": {
+          "disposition": {
+            "enum": [
+              "confirmed_fraud",
+              "false_positive",
+              "confirmed_legit",
+              "inconclusive"
+            ],
+            "title": "Disposition",
+            "type": "string"
+          },
+          "feeds_retrain": {
+            "default": true,
+            "title": "Feeds Retrain",
+            "type": "boolean"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "disposition"
+        ],
+        "title": "DispositionRequest",
+        "type": "object"
+      },
+      "EventBatch": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/EventRecord"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Events",
+            "type": "array"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "EventBatch",
+        "type": "object"
+      },
+      "EventRecord": {
+        "additionalProperties": false,
+        "description": "A behavioural event. The log a pure transactions table cannot express \u2014\nand the only way to reach S-077, whose first condition is \"a password reset\nN minutes before this transfer\".",
+        "properties": {
+          "attributes": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attributes"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "ip_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Address"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "subject_type": {
+            "title": "Subject Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_type",
+          "subject_type",
+          "subject_id"
+        ],
+        "title": "EventRecord",
+        "type": "object"
+      },
+      "Evidence": {
+        "additionalProperties": false,
+        "description": "What the decision could see, and what it could not.",
+        "properties": {
+          "degraded_features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Degraded Features",
+            "type": "array"
+          },
+          "evaluation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Id"
+          },
+          "evaluation_trigger": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Trigger"
+          },
+          "feature_version_set": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Feature Version Set",
+            "type": "object"
+          },
+          "pit_bound_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pit Bound At"
+          },
+          "replay_as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replay As Of"
+          },
+          "rule_version_set": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Rule Version Set",
+            "type": "object"
+          },
+          "trigger_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Id"
+          },
+          "trigger_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Type"
+          }
+        },
+        "title": "Evidence",
+        "type": "object"
+      },
+      "ExecutionIssued": {
+        "additionalProperties": false,
+        "description": "One thing the decision actually caused. Empty when the action was\n`allow`: nothing is issued for a charge nobody objected to.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "execution_id": {
+            "title": "Execution Id",
+            "type": "integer"
+          },
+          "issued_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issued At"
+          }
+        },
+        "required": [
+          "execution_id",
+          "action"
+        ],
+        "title": "ExecutionIssued",
+        "type": "object"
+      },
+      "ExecutionRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "alert_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert Id"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "decision_id": {
+            "title": "Decision Id",
+            "type": "integer"
+          },
+          "execution_id": {
+            "title": "Execution Id",
+            "type": "integer"
+          },
+          "issued_at": {
+            "format": "date-time",
+            "title": "Issued At",
+            "type": "string"
+          },
+          "latency_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Seconds"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "outcome_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome Source"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          },
+          "subject_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Type"
+          },
+          "synthetic": {
+            "title": "Synthetic",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "execution_id",
+          "decision_id",
+          "action",
+          "issued_at",
+          "synthetic"
+        ],
+        "title": "ExecutionRecord",
+        "type": "object"
+      },
+      "FabricationLimit": {
+        "additionalProperties": false,
+        "description": "One thing this answer cannot tell you, and why.\n\nPublished as rows rather than as one prose caveat because they are not all\nthe same KIND of limit \u2014 two are properties of the feature layer, one is a\nproperty of what was evaluated, one is a property of what a fabricated row\nis allowed to carry \u2014 and because `features` lets a console name the\nspecific keys instead of asserting a general shape.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Features",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "detail"
+        ],
+        "title": "FabricationLimit",
+        "type": "object"
+      },
+      "FeatureView": {
+        "additionalProperties": false,
+        "description": "One catalog row, spec and all.\n\n`default_when_absent` is published as-is, including the difference between\nSQL NULL and JSON `null`: `has_default` is the field that carries it, because\n\u00a75's whole distinction is between \"no default, let absence stay observable\"\nand \"0 is the real answer\" and JSON cannot express that difference alone.",
+        "properties": {
+          "aggregation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aggregation"
+          },
+          "baseline_spec": {
+            "title": "Baseline Spec"
+          },
+          "default_reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Reason Code"
+          },
+          "default_when_absent": {
+            "title": "Default When Absent"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "entity_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Type"
+          },
+          "fanout_policy": {
+            "default": "error",
+            "title": "Fanout Policy",
+            "type": "string"
+          },
+          "feature_key": {
+            "title": "Feature Key",
+            "type": "string"
+          },
+          "filter_predicate": {
+            "title": "Filter Predicate"
+          },
+          "has_default": {
+            "default": false,
+            "title": "Has Default",
+            "type": "boolean"
+          },
+          "inline_capable": {
+            "title": "Inline Capable",
+            "type": "boolean"
+          },
+          "is_graph": {
+            "default": false,
+            "title": "Is Graph",
+            "type": "boolean"
+          },
+          "max_staleness_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Staleness Seconds"
+          },
+          "refresh": {
+            "default": "incremental",
+            "title": "Refresh",
+            "type": "string"
+          },
+          "resolution_path": {
+            "default": "auto",
+            "title": "Resolution Path",
+            "type": "string"
+          },
+          "scope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope Key"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "source_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Kind"
+          },
+          "source_relation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Relation"
+          },
+          "spec_version": {
+            "default": 1,
+            "title": "Spec Version",
+            "type": "integer"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "subject_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Key"
+          },
+          "value_expr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Expr"
+          },
+          "value_type": {
+            "title": "Value Type",
+            "type": "string"
+          },
+          "window_spec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Spec"
+          }
+        },
+        "required": [
+          "feature_key",
+          "display_name",
+          "value_type",
+          "inline_capable"
+        ],
+        "title": "FeatureView",
+        "type": "object"
+      },
+      "GroundTruth": {
+        "additionalProperties": false,
+        "description": "Both numbers, never just the rate.",
+        "properties": {
+          "caveat": {
+            "default": "Measured against transactions.synthetic_label on the row that triggered each evaluation. Planted ground truth: exact on this dataset and meaningless outside it.",
+            "title": "Caveat",
+            "type": "string"
+          },
+          "flagged": {
+            "default": 0,
+            "title": "Flagged",
+            "type": "integer"
+          },
+          "flagged_labelled": {
+            "default": 0,
+            "title": "Flagged Labelled",
+            "type": "integer"
+          },
+          "flagged_on_fraud": {
+            "default": 0,
+            "title": "Flagged On Fraud",
+            "type": "integer"
+          },
+          "labelled": {
+            "default": 0,
+            "title": "Labelled",
+            "type": "integer"
+          },
+          "precision_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precision Pct"
+          }
+        },
+        "title": "GroundTruth",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "IngestReceipt": {
+        "additionalProperties": false,
+        "description": "What a batch actually did to the database.\n\n`duplicates` is separate from `rejected` on purpose: re-POSTing a batch\nafter a timeout is a retry, not an error, and a receipt that counted it as a\nfailure would push a caller toward doing something worse. Raw capture is\nappend-only, so the duplicate is DROPPED rather than merged \u2014 an arriving\nrow may not take the identity of one already recorded.",
+        "properties": {
+          "basis": {
+            "default": "Rows reported as already settled. They are written to raw capture and evaluated by the next cycle, not by this request \u2014 so an alert appears when the scheduler next runs, or immediately if a lane is run by hand. Nothing here decided anything.",
+            "title": "Basis",
+            "type": "string"
+          },
+          "devices_registered": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Devices Registered",
+            "type": "array"
+          },
+          "duplicates": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Duplicates",
+            "type": "array"
+          },
+          "max_occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Occurred At"
+          },
+          "rejected": {
+            "items": {
+              "$ref": "#/components/schemas/Rejected"
+            },
+            "title": "Rejected",
+            "type": "array"
+          },
+          "relation": {
+            "title": "Relation",
+            "type": "string"
+          },
+          "submitted": {
+            "title": "Submitted",
+            "type": "integer"
+          },
+          "written": {
+            "title": "Written",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "relation",
+          "submitted",
+          "written"
+        ],
+        "title": "IngestReceipt",
+        "type": "object"
+      },
+      "KpiPart": {
+        "additionalProperties": false,
+        "description": "One component of a tile, with its own denominator.\n\nParts exist because three of the nine tiles are not scalars \u2014 a score\ndistribution, a per-rule precision and a reason-code trend are each a set of\nnumbers \u2014 and because \u00a711's \"block / challenge / fail-open rate\" is one row\ncovering three rates whose denominators differ. Sharing a tile's denominator\nacross them would be the exact error rule 2 exists to prevent.",
+        "properties": {
+          "baseline_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Value"
+          },
+          "delta_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta Pct"
+          },
+          "denominator": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Denominator"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "numerator": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numerator"
+          },
+          "unit": {
+            "default": "count",
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "KpiPart",
+        "type": "object"
+      },
+      "KpiSet": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "baseline_absent_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Absent Reason"
+          },
+          "baseline_available": {
+            "title": "Baseline Available",
+            "type": "boolean"
+          },
+          "baseline_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline End"
+          },
+          "baseline_start": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Start"
+          },
+          "tiles": {
+            "items": {
+              "$ref": "#/components/schemas/KpiTile"
+            },
+            "title": "Tiles",
+            "type": "array"
+          },
+          "window_end": {
+            "format": "date-time",
+            "title": "Window End",
+            "type": "string"
+          },
+          "window_start": {
+            "format": "date-time",
+            "title": "Window Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of",
+          "window_start",
+          "window_end",
+          "baseline_available",
+          "tiles"
+        ],
+        "title": "KpiSet",
+        "type": "object"
+      },
+      "KpiTile": {
+        "additionalProperties": false,
+        "properties": {
+          "baseline_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline End"
+          },
+          "baseline_start": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Start"
+          },
+          "baseline_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Value"
+          },
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "caveat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caveat"
+          },
+          "delta_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta Pct"
+          },
+          "denominator": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Denominator"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "numerator": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numerator"
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/KpiPart"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "requires": {
+            "title": "Requires",
+            "type": "string"
+          },
+          "synthetic": {
+            "default": false,
+            "title": "Synthetic",
+            "type": "boolean"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "window_end": {
+            "format": "date-time",
+            "title": "Window End",
+            "type": "string"
+          },
+          "window_start": {
+            "format": "date-time",
+            "title": "Window Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "unit",
+          "window_start",
+          "window_end",
+          "basis",
+          "requires"
+        ],
+        "title": "KpiTile",
+        "type": "object"
+      },
+      "LinkBatch": {
+        "additionalProperties": false,
+        "properties": {
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/LinkRecord"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Links",
+            "type": "array"
+          }
+        },
+        "required": [
+          "links"
+        ],
+        "title": "LinkBatch",
+        "type": "object"
+      },
+      "LinkRecord": {
+        "additionalProperties": false,
+        "description": "An edge in the link layer, which is what the graph builder reads.\n\nThis is the only way to reach L-203: a ring is discovered from\n`entity_links`, not from transactions, so ingesting transfers alone will\nnever surface one however suspicious the money looks.",
+        "properties": {
+          "first_seen": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Seen"
+          },
+          "from_id": {
+            "title": "From Id",
+            "type": "string"
+          },
+          "from_type": {
+            "title": "From Type",
+            "type": "string"
+          },
+          "last_seen": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen"
+          },
+          "link_type": {
+            "title": "Link Type",
+            "type": "string"
+          },
+          "to_id": {
+            "title": "To Id",
+            "type": "string"
+          },
+          "to_type": {
+            "title": "To Type",
+            "type": "string"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight"
+          }
+        },
+        "required": [
+          "from_type",
+          "from_id",
+          "to_type",
+          "to_id",
+          "link_type"
+        ],
+        "title": "LinkRecord",
+        "type": "object"
+      },
+      "NamedValue": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "NamedValue",
+        "type": "object"
+      },
+      "OperatorValue": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "operator": {
+            "title": "Operator",
+            "type": "string"
+          },
+          "takes": {
+            "title": "Takes",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operator",
+          "takes",
+          "description"
+        ],
+        "title": "OperatorValue",
+        "type": "object"
+      },
+      "QueueEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "action_taken": {
+            "title": "Action Taken",
+            "type": "string"
+          },
+          "age_hours": {
+            "title": "Age Hours",
+            "type": "number"
+          },
+          "alert_id": {
+            "title": "Alert Id",
+            "type": "integer"
+          },
+          "band": {
+            "title": "Band",
+            "type": "string"
+          },
+          "dedup_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dedup Key"
+          },
+          "executions": {
+            "default": 0,
+            "title": "Executions",
+            "type": "integer"
+          },
+          "exposure_amount": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exposure Amount"
+          },
+          "exposure_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exposure Basis"
+          },
+          "exposure_factor": {
+            "title": "Exposure Factor",
+            "type": "number"
+          },
+          "first_event_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Event At"
+          },
+          "last_event_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Event At"
+          },
+          "priority": {
+            "title": "Priority",
+            "type": "number"
+          },
+          "priority_basis": {
+            "default": "score x (1 + w*log10(1+max(exposure,floor))) x 0.5^(age_hours/half_life); weights from alert_policy, age measured on last_event_at",
+            "title": "Priority Basis",
+            "type": "string"
+          },
+          "recency_factor": {
+            "title": "Recency Factor",
+            "type": "number"
+          },
+          "score": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Score",
+            "type": "string"
+          },
+          "score_factor": {
+            "title": "Score Factor",
+            "type": "number"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "subject_type": {
+            "title": "Subject Type",
+            "type": "string"
+          },
+          "synthetic_outcomes": {
+            "default": false,
+            "title": "Synthetic Outcomes",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "triggering_events": {
+            "title": "Triggering Events",
+            "type": "integer"
+          },
+          "unresolved_executions": {
+            "default": 0,
+            "title": "Unresolved Executions",
+            "type": "integer"
+          },
+          "worked_by_analyst": {
+            "default": false,
+            "title": "Worked By Analyst",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "alert_id",
+          "subject_type",
+          "subject_id",
+          "title",
+          "score",
+          "band",
+          "status",
+          "action_taken",
+          "triggering_events",
+          "age_hours",
+          "score_factor",
+          "exposure_factor",
+          "recency_factor",
+          "priority"
+        ],
+        "title": "QueueEntry",
+        "type": "object"
+      },
+      "ReferenceVocabulary": {
+        "additionalProperties": false,
+        "description": "Every vocabulary an authoring UI needs, from the rows that enforce it.\n\nThe point of serving this rather than hardcoding it in the console: these are\nthe same values `rules/validate.py` rejects against, and the same rows the\nforeign keys enforce. A dropdown built from anything else is a dropdown that\ncan offer an option the validator refuses.",
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActionValue"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "aggregations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Aggregations",
+            "type": "array"
+          },
+          "combine_values": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Combine Values",
+            "type": "array"
+          },
+          "execution_modes": {
+            "items": {
+              "$ref": "#/components/schemas/NamedValue"
+            },
+            "title": "Execution Modes",
+            "type": "array"
+          },
+          "operators": {
+            "items": {
+              "$ref": "#/components/schemas/OperatorValue"
+            },
+            "title": "Operators",
+            "type": "array"
+          },
+          "reason_codes": {
+            "items": {
+              "$ref": "#/components/schemas/NamedValue"
+            },
+            "title": "Reason Codes",
+            "type": "array"
+          },
+          "rule_statuses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rule Statuses",
+            "type": "array"
+          },
+          "source_relations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Relations",
+            "type": "array"
+          },
+          "subject_types": {
+            "items": {
+              "$ref": "#/components/schemas/NamedValue"
+            },
+            "title": "Subject Types",
+            "type": "array"
+          }
+        },
+        "title": "ReferenceVocabulary",
+        "type": "object"
+      },
+      "Rejected": {
+        "additionalProperties": false,
+        "description": "One row that was not written, and why. Every reason, not the first.",
+        "properties": {
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "index"
+        ],
+        "title": "Rejected",
+        "type": "object"
+      },
+      "RuleDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "clear_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clear Text"
+          },
+          "combine": {
+            "default": "AND",
+            "title": "Combine",
+            "type": "string"
+          },
+          "condition_set": {
+            "items": {
+              "$ref": "#/components/schemas/ConditionView"
+            },
+            "title": "Condition Set",
+            "type": "array"
+          },
+          "conditions": {
+            "default": 0,
+            "title": "Conditions",
+            "type": "integer"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "evaluated": {
+            "default": true,
+            "title": "Evaluated",
+            "type": "boolean"
+          },
+          "evaluation_lag_seconds": {
+            "default": 0.0,
+            "title": "Evaluation Lag Seconds",
+            "type": "number"
+          },
+          "execution_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Mode"
+          },
+          "is_veto": {
+            "default": false,
+            "title": "Is Veto",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prevent_threshold": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prevent Threshold"
+          },
+          "recommended_action_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Action Text"
+          },
+          "review_threshold": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Threshold"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "shadow_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shadow Since"
+          },
+          "status": {
+            "default": "active",
+            "title": "Status",
+            "type": "string"
+          },
+          "status_caveat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Caveat"
+          },
+          "subject_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Type"
+          },
+          "takes_action": {
+            "default": true,
+            "title": "Takes Action",
+            "type": "boolean"
+          },
+          "version": {
+            "default": 1,
+            "title": "Version",
+            "type": "integer"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/RuleVersionView"
+            },
+            "title": "Versions",
+            "type": "array"
+          },
+          "versions_resolve": {
+            "default": false,
+            "title": "Versions Resolve",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rule_id",
+          "name"
+        ],
+        "title": "RuleDetail",
+        "type": "object"
+      },
+      "RuleDraft": {
+        "additionalProperties": false,
+        "description": "A candidate rule. The same body simulate (session 2) and publish (session\n3) accept, so the tested thing and the written thing cannot diverge.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "clear_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clear Text"
+          },
+          "combine": {
+            "default": "AND",
+            "title": "Combine",
+            "type": "string"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/ConditionDraft"
+            },
+            "title": "Conditions",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "evaluation_lag_seconds": {
+            "default": 0.0,
+            "title": "Evaluation Lag Seconds",
+            "type": "number"
+          },
+          "execution_mode": {
+            "title": "Execution Mode",
+            "type": "string"
+          },
+          "is_veto": {
+            "default": false,
+            "title": "Is Veto",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prevent_threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prevent Threshold"
+          },
+          "recommended_action_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Action Text"
+          },
+          "review_threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Review Threshold"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "status": {
+            "default": "shadow",
+            "title": "Status",
+            "type": "string"
+          },
+          "subject_type": {
+            "title": "Subject Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "name",
+          "subject_type",
+          "execution_mode",
+          "action",
+          "review_threshold"
+        ],
+        "title": "RuleDraft",
+        "type": "object"
+      },
+      "RuleSimulation": {
+        "additionalProperties": false,
+        "description": "What a candidate rule WOULD do, with nothing written down.\n\nPublished as part of simulation.v1 rather than catalog.v1 because it is a\nsimulation: the guarantee it carries is `persisted: false`, and that\nguarantee is what this contract is for.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "basis": {
+            "default": "A candidate rule applied to the control plane inside a transaction that is rolled back, then the engine's own pipeline over stored rows. No rule, condition, decision, alert, signal or execution was written. Every count below is over subjects_evaluated, which is not the population \u2014 see population.basis.",
+            "title": "Basis",
+            "type": "string"
+          },
+          "conditions": {
+            "items": {
+              "$ref": "#/components/schemas/ConditionOutcomeSummary"
+            },
+            "title": "Conditions",
+            "type": "array"
+          },
+          "diff": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionDiff"
+            },
+            "title": "Diff",
+            "type": "array"
+          },
+          "diff_action_changed": {
+            "default": 0,
+            "title": "Diff Action Changed",
+            "type": "integer"
+          },
+          "diff_new": {
+            "default": 0,
+            "title": "Diff New",
+            "type": "integer"
+          },
+          "diff_score_changed": {
+            "default": 0,
+            "title": "Diff Score Changed",
+            "type": "integer"
+          },
+          "diff_total": {
+            "default": 0,
+            "title": "Diff Total",
+            "type": "integer"
+          },
+          "distribution": {
+            "$ref": "#/components/schemas/ScoreDistribution"
+          },
+          "evaluated_as": {
+            "default": "active",
+            "title": "Evaluated As",
+            "type": "string"
+          },
+          "examples": {
+            "items": {
+              "$ref": "#/components/schemas/WorkedExample"
+            },
+            "title": "Examples",
+            "type": "array"
+          },
+          "ground_truth": {
+            "$ref": "#/components/schemas/GroundTruth"
+          },
+          "hygiene_caveat": {
+            "default": "would_alert counts EVALUATIONS that would raise a case, not cases. \u00a79's hygiene \u2014 folding a repeat onto an open case, restating it, suppressing under an investigation \u2014 happens at persist time, and nothing is persisted here. On a subject that already has an open case the real cycle would fold rather than raise, so this is an upper bound on new cases.",
+            "title": "Hygiene Caveat",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "persisted": {
+            "const": false,
+            "default": false,
+            "title": "Persisted",
+            "type": "boolean"
+          },
+          "population": {
+            "$ref": "#/components/schemas/SampledPopulation"
+          },
+          "prevent_threshold": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prevent Threshold"
+          },
+          "review_threshold": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Review Threshold",
+            "type": "string"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "rule_name": {
+            "title": "Rule Name",
+            "type": "string"
+          },
+          "shadow_note": {
+            "default": "A candidate is evaluated as if ACTIVE, whatever status it asks for: the question a what-if answers is what the rule would DO. Publishing it lands it in shadow, where (migration 0030) it scores, records its conditions and records the action it would have taken \u2014 and takes none \u2014 until an admin promotes it.",
+            "title": "Shadow Note",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "would_alert": {
+            "default": 0,
+            "title": "Would Alert",
+            "type": "integer"
+          },
+          "would_authorise": {
+            "default": 0,
+            "title": "Would Authorise",
+            "type": "integer"
+          },
+          "would_carry_action": {
+            "default": 0,
+            "title": "Would Carry Action",
+            "type": "integer"
+          },
+          "would_fire": {
+            "default": 0,
+            "title": "Would Fire",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rule_id",
+          "rule_name",
+          "mode",
+          "status",
+          "action",
+          "review_threshold",
+          "population",
+          "distribution",
+          "ground_truth"
+        ],
+        "title": "RuleSimulation",
+        "type": "object"
+      },
+      "RuleSimulationRequest": {
+        "additionalProperties": false,
+        "description": "What an admin sends to /simulate/rule.\n\n`rule` is a `RuleDraft` \u2014 the SAME body `POST /rules` will accept in session\n3, validated by the same `rules/validate.py`. That is decision 6: the test\npath and the write path share a validator so the tested thing and the written\nthing cannot diverge, and they stay separate endpoints so the test path can\nnever accidentally become the write path.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "diff_limit": {
+            "default": 25,
+            "maximum": 500.0,
+            "minimum": 0.0,
+            "title": "Diff Limit",
+            "type": "integer"
+          },
+          "examples": {
+            "default": 5,
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "title": "Examples",
+            "type": "integer"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/RuleDraft"
+          },
+          "sample_cap": {
+            "default": 2000,
+            "maximum": 50000.0,
+            "minimum": 1.0,
+            "title": "Sample Cap",
+            "type": "integer"
+          },
+          "subject_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Ids"
+          }
+        },
+        "required": [
+          "rule"
+        ],
+        "title": "RuleSimulationRequest",
+        "type": "object"
+      },
+      "RuleSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "combine": {
+            "default": "AND",
+            "title": "Combine",
+            "type": "string"
+          },
+          "conditions": {
+            "default": 0,
+            "title": "Conditions",
+            "type": "integer"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "evaluated": {
+            "default": true,
+            "title": "Evaluated",
+            "type": "boolean"
+          },
+          "evaluation_lag_seconds": {
+            "default": 0.0,
+            "title": "Evaluation Lag Seconds",
+            "type": "number"
+          },
+          "execution_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Mode"
+          },
+          "is_veto": {
+            "default": false,
+            "title": "Is Veto",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prevent_threshold": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prevent Threshold"
+          },
+          "review_threshold": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Threshold"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "shadow_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shadow Since"
+          },
+          "status": {
+            "default": "active",
+            "title": "Status",
+            "type": "string"
+          },
+          "status_caveat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Caveat"
+          },
+          "subject_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Type"
+          },
+          "takes_action": {
+            "default": true,
+            "title": "Takes Action",
+            "type": "boolean"
+          },
+          "version": {
+            "default": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rule_id",
+          "name"
+        ],
+        "title": "RuleSummary",
+        "type": "object"
+      },
+      "RuleTrace": {
+        "additionalProperties": false,
+        "description": "One rule's own verdict, before consolidation and before precedence.\n\nPublished because a simulation is something a person runs to understand WHY,\nand the two questions an alert cannot answer are \"which rules looked at this\nand declined to fire\" and \"which fired but had no authority\". The stored\nequivalent is `decision_conditions`, which exists for the population and is\nfar too coarse to read one subject out of.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "authorised": {
+            "title": "Authorised",
+            "type": "boolean"
+          },
+          "degraded_features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Degraded Features",
+            "type": "array"
+          },
+          "is_veto": {
+            "default": false,
+            "title": "Is Veto",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prevent_threshold": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prevent Threshold"
+          },
+          "preventive_authority": {
+            "default": true,
+            "title": "Preventive Authority",
+            "type": "boolean"
+          },
+          "review_threshold": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Threshold"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "satisfied": {
+            "title": "Satisfied",
+            "type": "boolean"
+          },
+          "score": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Score",
+            "type": "string"
+          },
+          "shadow": {
+            "default": false,
+            "title": "Shadow",
+            "type": "boolean"
+          },
+          "veto_established": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Veto Established"
+          }
+        },
+        "required": [
+          "rule_id",
+          "name",
+          "action",
+          "score",
+          "satisfied",
+          "authorised"
+        ],
+        "title": "RuleTrace",
+        "type": "object"
+      },
+      "RuleVersionView": {
+        "additionalProperties": false,
+        "description": "One published snapshot of a rule.\n\n`rule_versions` was empty for every rule shipped through Week 4 \u2014 nothing\nhad ever published \u2014 so a stored `rule_version_set` named a version with no\ndefinition behind it. Session 3's publish path writes one on every save,\npromotion and retirement, and seed `0031` backfilled the definitions that\npredate it, so `versions_resolve` is now a fact about this rule rather than\na statement about the project.",
+        "properties": {
+          "published_at": {
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
+          "published_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published By"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "published_at"
+        ],
+        "title": "RuleVersionView",
+        "type": "object"
+      },
+      "SampledPopulation": {
+        "additionalProperties": false,
+        "description": "What was actually evaluated, and what it was drawn from.\n\nThe cap is published as the denominator rather than applied silently,\nbecause a rate whose denominator is a sample and does not say so is the same\nunearned claim \u00a711 refuses on a KPI tile.",
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "lane": {
+            "title": "Lane",
+            "type": "string"
+          },
+          "sample_cap": {
+            "title": "Sample Cap",
+            "type": "integer"
+          },
+          "subject_type": {
+            "title": "Subject Type",
+            "type": "string"
+          },
+          "subjects_available": {
+            "title": "Subjects Available",
+            "type": "integer"
+          },
+          "subjects_evaluated": {
+            "title": "Subjects Evaluated",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "subject_type",
+          "lane",
+          "as_of",
+          "subjects_available",
+          "subjects_evaluated",
+          "sample_cap",
+          "truncated",
+          "basis"
+        ],
+        "title": "SampledPopulation",
+        "type": "object"
+      },
+      "ScopedFeaturePass": {
+        "additionalProperties": false,
+        "description": "What the fabricated row was actually scored against.\n\nWithout this a caller cannot tell a feature that was recomputed with the new\ncharge in it from one that was read at its stored value \u2014 and those are\ndifferent claims about the same number. `card_cnp_count` is the first kind;\na graph feature is the second.",
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "not_recomputed": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Not Recomputed",
+            "type": "object"
+          },
+          "recomputed": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Recomputed",
+            "type": "object"
+          }
+        },
+        "required": [
+          "as_of"
+        ],
+        "title": "ScopedFeaturePass",
+        "type": "object"
+      },
+      "ScoreDistribution": {
+        "additionalProperties": false,
+        "properties": {
+          "bands": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Bands",
+            "type": "object"
+          },
+          "max_score": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Score"
+          },
+          "median_score": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Score"
+          },
+          "min_score": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Score"
+          },
+          "scored": {
+            "title": "Scored",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scored"
+        ],
+        "title": "ScoreDistribution",
+        "type": "object"
+      },
+      "Signal": {
+        "additionalProperties": false,
+        "properties": {
+          "asserted_by_rules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Asserted By Rules",
+            "type": "array"
+          },
+          "contribution": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Contribution",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "aggravating",
+              "mitigating",
+              "veto"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "feature_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Key"
+          },
+          "feature_value": {
+            "title": "Feature Value"
+          },
+          "human_text": {
+            "title": "Human Text",
+            "type": "string"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "source_rule_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Rule Id"
+          },
+          "value_as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value As Of"
+          },
+          "value_computed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Computed At"
+          }
+        },
+        "required": [
+          "rank",
+          "feature_key",
+          "contribution",
+          "direction",
+          "human_text"
+        ],
+        "title": "Signal",
+        "type": "object"
+      },
+      "SimulatedDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/Action"
+          },
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "band": {
+            "title": "Band",
+            "type": "string"
+          },
+          "basis": {
+            "default": "Simulated evaluation: the engine's own pipeline (resolve, point-in-time read, conditions, per-rule score, consolidate, band, precedence) over stored rows, inside a transaction that is rolled back. No decision, alert, signal, execution or feature value was written. Nothing here was acted on.",
+            "title": "Basis",
+            "type": "string"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "lane": {
+            "title": "Lane",
+            "type": "string"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "persisted": {
+            "const": false,
+            "default": false,
+            "title": "Persisted",
+            "type": "boolean"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/RuleTrace"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "score": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Score",
+            "type": "string"
+          },
+          "shadow_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shadow Action"
+          },
+          "shadow_rules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Shadow Rules",
+            "type": "array"
+          },
+          "shadow_score": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shadow Score"
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/Signal"
+            },
+            "title": "Signals",
+            "type": "array"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/Subject"
+          },
+          "would_alert": {
+            "default": false,
+            "title": "Would Alert",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "subject",
+          "lane",
+          "as_of",
+          "score",
+          "band",
+          "action",
+          "evidence"
+        ],
+        "title": "SimulatedDecision",
+        "type": "object"
+      },
+      "SimulationRequest": {
+        "additionalProperties": false,
+        "description": "What a caller sends to /simulate/subject. Not part of the published read\nshape \u2014 an input model \u2014 but kept here so the pair is read together.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "lane": {
+            "default": "inline_sync",
+            "enum": [
+              "inline_sync",
+              "async"
+            ],
+            "title": "Lane",
+            "type": "string"
+          },
+          "replay_as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replay As Of"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "subject_type": {
+            "title": "Subject Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject_type",
+          "subject_id"
+        ],
+        "title": "SimulationRequest",
+        "type": "object"
+      },
+      "Subject": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id"
+        ],
+        "title": "Subject",
+        "type": "object"
+      },
+      "TransactionBatch": {
+        "additionalProperties": false,
+        "properties": {
+          "transactions": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionRecord"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Transactions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "transactions"
+        ],
+        "title": "TransactionBatch",
+        "type": "object"
+      },
+      "TransactionDraft": {
+        "additionalProperties": false,
+        "description": "A charge to invent.\n\nThe field list is `TransactionFields`, shared verbatim with the two doors\nthat actually keep a row (`contract/ingest.py`). That sharing is the point:\na what-if whose accepted shape differed from the live path's would answer a\nquestion nobody can act on \u2014 it would report a verdict on a charge\n`/authorize` refuses to receive, or refuse one it would have taken.\n\nTwo additions, and they are what a HYPOTHETICAL charge may say that an\nauthorization request may not: `auth_result` and `decline_reason`. A\nfabricated row is allowed to describe a decline, because\n`merchant_decline_burst` counts declines and a what-if on a card-testing\nrule has to be able to express one. `/authorize` forbids exactly these two\nfor the opposite reason \u2014 there the engine chooses them.\n\n`synthetic_label` is absent here and refused by the engine even if a caller\nreaches it another way: it is planted ground truth, and a fabricated charge\nthat labelled itself would answer the question it was asked. Ingested rows\nMAY carry one, which is `contract/ingest.TransactionRecord`.\n\nAn unstated `currency`, `direction`, `txn_type` or `auth_result` takes the\nvalue in `ingest.records.TRANSACTION_DEFAULTS` \u2014 the same default\n`generate_synthetic.mk_txn` applies to every row it writes. `amount_base`\nfalls back to `amount`, and `txn_id` is generated as `SIM-\u2026` when unstated.",
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Amount"
+          },
+          "amount_base": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Base"
+          },
+          "auth_result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Result"
+          },
+          "billing_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billing Country"
+          },
+          "card_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Id"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "counterparty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "customer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Id"
+          },
+          "decline_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decline Reason"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "entry_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Mode"
+          },
+          "ip_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Address"
+          },
+          "mcc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mcc"
+          },
+          "merchant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant Id"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "payee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payee Id"
+          },
+          "shipping_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipping Country"
+          },
+          "txn_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Country"
+          },
+          "txn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Id"
+          },
+          "txn_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Lat"
+          },
+          "txn_lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Lon"
+          },
+          "txn_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Type"
+          }
+        },
+        "required": [
+          "amount"
+        ],
+        "title": "TransactionDraft",
+        "type": "object"
+      },
+      "TransactionRecord": {
+        "additionalProperties": false,
+        "description": "A charge that already happened, reported as it was settled.\n\nThis is the door for planting a card-testing burst: `merchant_decline_burst`\ncounts declines, and an authorization request cannot describe one because\nthe engine would be deciding it.",
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Amount"
+          },
+          "amount_base": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Base"
+          },
+          "auth_result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Result"
+          },
+          "billing_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billing Country"
+          },
+          "card_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Id"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "counterparty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "customer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Id"
+          },
+          "decline_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decline Reason"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "entry_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Mode"
+          },
+          "ip_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Address"
+          },
+          "mcc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mcc"
+          },
+          "merchant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merchant Id"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "payee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payee Id"
+          },
+          "shipping_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shipping Country"
+          },
+          "synthetic_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synthetic Label"
+          },
+          "txn_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Country"
+          },
+          "txn_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Id"
+          },
+          "txn_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Lat"
+          },
+          "txn_lon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Lon"
+          },
+          "txn_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Txn Type"
+          }
+        },
+        "required": [
+          "amount"
+        ],
+        "title": "TransactionRecord",
+        "type": "object"
+      },
+      "TransactionSimulation": {
+        "additionalProperties": false,
+        "description": "A charge that never happened, scored, with nothing written down.\n\nA sibling on simulation.v1, and `decision` is a `SimulatedDecision` reused\nwhole rather than flattened: the score bar for a fabricated charge and the\nscore bar for a stored one are the same object, and the \u00a71 invariants are\nalready enforced on it.\n\n`fabricated` is the row as INSERTED, including everything the caller left\nunstated \u2014 a reader comparing a score against the charge they described\nrather than the one that was scored is exactly the confusion this endpoint\nis most able to cause.",
+        "properties": {
+          "basis": {
+            "default": "A transaction that never happened, inserted inside a transaction that is rolled back, followed by a feature pass scoped to the instant it claims to have occurred at, then the engine's own pipeline. No transaction, feature value, decision, alert, signal or execution was written.",
+            "title": "Basis",
+            "type": "string"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/SimulatedDecision"
+          },
+          "fabricated": {
+            "additionalProperties": true,
+            "title": "Fabricated",
+            "type": "object"
+          },
+          "features": {
+            "$ref": "#/components/schemas/ScopedFeaturePass"
+          },
+          "lane": {
+            "title": "Lane",
+            "type": "string"
+          },
+          "limits": {
+            "items": {
+              "$ref": "#/components/schemas/FabricationLimit"
+            },
+            "title": "Limits",
+            "type": "array"
+          },
+          "persisted": {
+            "const": false,
+            "default": false,
+            "title": "Persisted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "lane",
+          "features",
+          "decision"
+        ],
+        "title": "TransactionSimulation",
+        "type": "object"
+      },
+      "TransactionSimulationRequest": {
+        "additionalProperties": false,
+        "description": "What an admin sends to /simulate/transaction (WEEK5-PLAN O4).",
+        "properties": {
+          "lane": {
+            "default": "inline_sync",
+            "enum": [
+              "inline_sync",
+              "async"
+            ],
+            "title": "Lane",
+            "type": "string"
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/TransactionDraft"
+          }
+        },
+        "required": [
+          "transaction"
+        ],
+        "title": "TransactionSimulationRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WorkedExample": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "action_source_rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Source Rule"
+          },
+          "band": {
+            "title": "Band",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "score": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Score",
+            "type": "string"
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/Signal"
+            },
+            "title": "Signals",
+            "type": "array"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "would_alert": {
+            "title": "Would Alert",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "subject_id",
+          "score",
+          "band",
+          "action",
+          "would_alert"
+        ],
+        "title": "WorkedExample",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Serves the frozen alert.v1 contract, plus its siblings queue.v1, executions.v1, kpis.v1, explanation.v1, dispositions.v1, simulation.v1, catalog.v1 and ingest.v1. Reads are open; the surfaces that leave a mark \u2014 writing a disposition, running the engine on demand, writing to the control plane, and letting a row into raw capture \u2014 require a bearer token, and everything that touches a rule or ingests requires the admin role. A published rule lands in shadow: it is scored and recorded, and it acts on nothing until it is promoted. POST /authorize is the one endpoint that can stop a charge: the engine decides before the row is committed, so a declined charge is never an approved transaction.",
+    "title": "GlassBox API",
+    "version": "1.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/alerts": {
+      "get": {
+        "operationId": "get_alerts_alerts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "band",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Band"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subject Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AlertSummary"
+                  },
+                  "title": "Response Get Alerts Alerts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Alerts"
+      }
+    },
+    "/alerts/{alert_id}": {
+      "get": {
+        "operationId": "get_alert_detail_alerts__alert_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "title": "Alert Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Alert Detail"
+      }
+    },
+    "/alerts/{alert_id}/copilot": {
+      "get": {
+        "description": "The three chips, answered from this alert's rows and nothing else.",
+        "operationId": "get_copilot_alerts__alert_id__copilot_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "title": "Alert Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CopilotResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Copilot"
+      }
+    },
+    "/alerts/{alert_id}/executions": {
+      "get": {
+        "description": "What was actually done to the customer, and how it turned out.\n\nAn empty list is a real answer \u2014 most alerts authorise no preventive action \u2014\nso a 404 is reserved for an alert that does not exist.",
+        "operationId": "get_alert_executions_alerts__alert_id__executions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "title": "Alert Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExecutionRecord"
+                  },
+                  "title": "Response Get Alert Executions Alerts  Alert Id  Executions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Alert Executions"
+      }
+    },
+    "/alerts/{alert_id}/outcome": {
+      "get": {
+        "description": "The case's verdict and every disposition behind it.\n\nAn undispositioned case returns a verdict of `null` rather than a 404: the\nalert exists and nobody has judged it, which is a real answer and the one the\nqueue is built on.",
+        "operationId": "get_outcome_alerts__alert_id__outcome_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "title": "Alert Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseVerdict"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Outcome"
+      },
+      "post": {
+        "description": "Mark a case: confirmed fraud, false positive, confirmed legitimate, or\ninconclusive. Returns the whole case state, including the history, so a\nconsole never has to ask a second time whether the verdict stuck.",
+        "operationId": "post_outcome_alerts__alert_id__outcome_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "title": "Alert Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DispositionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseVerdict"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Outcome"
+      }
+    },
+    "/alerts/{alert_id}/report": {
+      "get": {
+        "description": "The filing draft. `markdown` carries its own draft notice.",
+        "operationId": "get_case_report_alerts__alert_id__report_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "title": "Alert Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Case Report"
+      }
+    },
+    "/authorize": {
+      "post": {
+        "description": "Decide a charge, and write the row carrying the decision.\n\nThis is the only endpoint in the project that can stop something. The action\nprecedence \u00a77 describes has always chosen `challenge` or `block` correctly;\nwhat it has never had is a charge whose fate depended on the answer. Here it\ndoes: a preventive action means the row is committed as `declined`, and\nbecause raw capture is append-only there is no moment at which a blocked\ncharge existed as an approved transaction.\n\nSynchronous by design. The inline lane's budget is 50 ms p99 (\u00a72.1) and this\nis where that number stops being a design target and starts being something\na caller can measure \u2014 `latency_ms` rides on the response for exactly that\nreason, and it is honest about including the feature pass.",
+        "operationId": "authorize_charge_authorize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizationOutcome"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Authorize Charge"
+      }
+    },
+    "/cycle": {
+      "get": {
+        "description": "Is anything actually running, and how far has it got?\n\nPublished rather than implied. A console that claims the system is live\nwhile nothing ticks is the same unearned claim \u00a711 objects to in the KPI\ncopy, so the answer comes from `ingest_watermark` and from the scheduler\nitself rather than from a hardcoded `true`.",
+        "operationId": "cycle_state_cycle_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Cycle State"
+      },
+      "post": {
+        "description": "Turn the engine over once, now, without waiting for the scheduler.\n\nThe demo control, and the test seam. Same function the background thread\ncalls \u2014 there is no second cycle implementation, because a second one would\nbe a second answer about what a cycle does.",
+        "operationId": "run_one_cycle_cycle_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CycleReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Run One Cycle"
+      }
+    },
+    "/features": {
+      "get": {
+        "description": "The catalog, computation specs and all.\n\n`inline_capable` is a filter rather than a decoration because it is a\nconstraint on authoring: \u00a72.1 makes a rule inline only if every feature it\nreads is inline-capable, and the validator rejects one that is not.",
+        "operationId": "get_features_features_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "active",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "inline_capable",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Inline Capable"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FeatureView"
+                  },
+                  "title": "Response Get Features Features Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Features"
+      }
+    },
+    "/features/{feature_key}/publish": {
+      "post": {
+        "description": "Make a catalog row's current computation spec retrievable at a version.\n\nThere is no feature-AUTHORING endpoint, deliberately: a computation spec is\nedited by seed, because writing one is a data-engineering act rather than an\nadmin one (README, \"what costs rows and what costs code\"). This closes the\nother end of D1 \u2014 after such a seed, `feature_version_set` on every decision\nsince names a spec version with no definition behind it.\n\nIdempotent: publishing a spec that has not moved returns the same version and\nwrites nothing (0030).",
+        "operationId": "publish_feature_spec_features__feature_key__publish_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "feature_key",
+            "required": true,
+            "schema": {
+              "title": "Feature Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Publish Feature Spec"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/ingest/events": {
+      "post": {
+        "description": "The behavioural log. Without it S-077 cannot fire, whatever the transfer\nlooks like: its first condition is a password reset N minutes before the\nmovement, and that fact lives nowhere else.",
+        "operationId": "ingest_events_ingest_events_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Events"
+      }
+    },
+    "/ingest/links": {
+      "post": {
+        "description": "Edges in the link layer, which is what the graph builder reads.\n\nThe only way to reach L-203. A ring is discovered from `entity_links`, so a\nhundred ingested transfers between four accounts produce no cluster and no\nnetwork subject to score \u2014 the `opened_on` edges are the pattern.",
+        "operationId": "ingest_links_ingest_links_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Links"
+      }
+    },
+    "/ingest/transactions": {
+      "post": {
+        "description": "Transactions that already settled, including declines.\n\nThe door for planting a card-testing burst: `merchant_decline_burst` counts\ndeclines, and an authorization request cannot describe one because the\nengine would be deciding it.",
+        "operationId": "ingest_transactions_ingest_transactions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransactionBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestReceipt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest Transactions"
+      }
+    },
+    "/kpis": {
+      "get": {
+        "description": "Computed from stored rows; nothing here is illustrative.\n\nThe default window is seven days because the dataset spans thirty: at any\nwindow over about fifteen the preceding equal-length window falls off the\nfront of the data, the baseline becomes unavailable, and every delta is\ncorrectly \u2014 but uninformatively \u2014 null. `baseline_absent_reason` says so on\nthe wire when it happens rather than leaving a client to infer it.",
+        "operationId": "get_kpis_kpis_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "window_days",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Window Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KpiSet"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Kpis"
+      }
+    },
+    "/me": {
+      "get": {
+        "description": "Who the presented token is, and what it may do.\n\nThe console needs this before it can decide whether to render the admin\nsurfaces at all, and a client that has to POST something to find out it is\nnot allowed has already asked the user to do work it knew would fail.",
+        "operationId": "me_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Me Me Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Me"
+      }
+    },
+    "/queue": {
+      "get": {
+        "description": "Priority-ordered, not score-ordered (\u00a79).\n\n`as_of` is exposed rather than hidden: recency decay makes the order a\nfunction of an instant, and a caller that cannot name the instant cannot\nreproduce the order it was shown.\n\n`include_worked` brings back cases a PERSON has dispositioned \u2014 a\nrecently-closed view, not the working queue. A case closed only by the\nsynthetic settler was never worked and never left (contract/queue.py).",
+        "operationId": "get_queue_queue_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "open",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subject Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_worked",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Worked",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/QueueEntry"
+                  },
+                  "title": "Response Get Queue Queue Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Queue"
+      }
+    },
+    "/reference": {
+      "get": {
+        "description": "Operators, actions and their severity ladder, subject types, reason codes.\n\nFrom the `ref_*` rows \u2014 the same rows the foreign keys enforce and the\nvalidator checks against \u2014 except for the operator and reducer lists, which\ncome from the interpreter itself because they are not data.",
+        "operationId": "get_reference_reference_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferenceVocabulary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Reference"
+      }
+    },
+    "/rules": {
+      "get": {
+        "description": "Every rule, including `inactive` ones.\n\nThis is the control plane, not the engine's view of it: a rule that has been\nretired is exactly what an admin needs to see in order to un-retire it, and\nit cannot be deleted anyway \u2014 `decisions.action_source_rule` and\n`alert_signals.source_rule_id` reference it with no ON DELETE.",
+        "operationId": "get_rules_rules_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subject Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RuleSummary"
+                  },
+                  "title": "Response Get Rules Rules Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Rules"
+      },
+      "post": {
+        "description": "Author a new rule. It lands in shadow and acts on nothing.\n\nReturns the full `RuleDetail`, including `versions` \u2014 which now resolves,\nbecause the publish that just ran is the first row in it.",
+        "operationId": "create_rule_rules_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Rule"
+      }
+    },
+    "/rules/{rule_id}": {
+      "delete": {
+        "description": "Retire a rule \u2014 or, for a draft that never went anywhere, remove it.\n\nRetiring is the operation that was actually being asked for: an inactive\nrule is not loaded by the engine, and it stays in the table because every\ndecision it ever carried names it.",
+        "operationId": "remove_rule_rules__rule_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "purge",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Purge",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Rule"
+      },
+      "get": {
+        "description": "One rule, its conditions, and what each condition has actually DONE.\n\nThe performance block is `v_condition_performance` \u2014 \u00a710's finding, on the\nscreen where an admin is editing the price it is a finding about. A condition\nthat has never been evaluated carries `performance: null` and a sentence\nsaying why, because zeroes there would read as a measurement rather than as\nan absence of one.",
+        "operationId": "get_rule_rules__rule_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Rule"
+      },
+      "put": {
+        "description": "Replace a rule's definition, keeping its identity and its history.\n\nThe status in the body must match the status the rule already has. An edit\nthat could also flip a rule from shadow to active is an edit that starts\nacting on customers as a side effect of fixing a typo, and the refusal names\nthe endpoint that does mean to do that.",
+        "operationId": "edit_rule_rules__rule_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Rule"
+      }
+    },
+    "/rules/{rule_id}/promote": {
+      "post": {
+        "description": "shadow -> active. From here the rule can alert, and can act.\n\nWith two demo users there is no real separation of duties, so a\nsecond-approver gate would be theatre (decision 2). Recording WHO is the part\nthat survives into a real deployment, and it is recorded on the version this\npublishes \u2014 not in a log line.",
+        "operationId": "promote_rules__rule_id__promote_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Promote"
+      }
+    },
+    "/simulate/rule": {
+      "post": {
+        "description": "Test a candidate rule against history before anything is written.\n\n**Admin only.** It is a read of the population by way of the control plane,\nand the control plane is the admin's surface; session 3's `POST /rules` takes\nthe identical body and the identical validator, so an analyst who could run\nthis could author against the write endpoint's exact contract without being\nallowed to use it.\n\nValidation happens here and again at publish, from one function\n(`rules/validate.py`) \u2014 that is the point of decision 6. A rejection is a 422\ncarrying EVERY problem, not the first one, because an author fixing errors one\nround trip at a time is an author who stops using the validator.",
+        "operationId": "simulate_candidate_rule_simulate_rule_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleSimulationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleSimulation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Simulate Candidate Rule"
+      }
+    },
+    "/simulate/subject": {
+      "post": {
+        "description": "Re-derive one subject's decision from stored rows.\n\nWith `replay_as_of` set to a stored decision's `decided_at`, this answers\n\"what did that decision see?\" rather than \"what would we say today?\" \u2014 the\ntwo differ the moment a feature has been recomputed since, which is the\nfailure \u00a74 exists to prevent and the reason `feature_values` is bitemporal.",
+        "operationId": "simulate_simulate_subject_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimulatedDecision"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Simulate"
+      }
+    },
+    "/simulate/transaction": {
+      "post": {
+        "description": "Score a charge that never happened.\n\n**Admin only** (WEEK5-PLAN O4). This is the one simulation that FABRICATES\nAN EVENT, and an event is the thing this system's whole record is made of: a\npayload showing a score against a transaction id is one screenshot away from\nbeing read as something that occurred. Every other defence here is on the\npayload \u2014 `persisted: false`, the fabricated row echoed as inserted, four\nnamed limits \u2014 and the role is the defence that does not depend on anyone\nreading it.\n\nThe refusals are answers, not errors. An unknown card, a borrowed real\n`txn_id` and a fabricated `synthetic_label` all come back as a 422 listing\nevery problem at once, from a check that runs BEFORE the sandbox opens.",
+        "operationId": "simulate_hypothetical_transaction_simulate_transaction_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransactionSimulationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionSimulation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Simulate Hypothetical Transaction"
+      }
+    }
+  }
+}

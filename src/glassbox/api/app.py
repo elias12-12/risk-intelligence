@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from .. import scheduler as scheduler_mod
 from .auth import Principal, principal
@@ -66,6 +69,48 @@ app.include_router(ingest_router)
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def _mount_console() -> None:
+    """Serve `console/dist` at /console, when it has been built.
+
+    Decision 9 chose a Vite dev proxy over a CORS allowlist on the grounds that
+    the bundle is served same-origin in the end — so CORS never becomes a
+    production surface. This is that end. In development the console runs on
+    :5173 and proxies `/api` here; in a build it is served from this process and
+    calls the routes at the root, with no second origin either way.
+
+    Mounted under a PREFIX rather than at `/`. A console at the root would need a
+    catch-all to serve an SPA deep link, and a catch-all changes what every
+    unmatched path returns — including the ones 443 tests assert 404s on. A
+    console must not be able to move an API's behaviour, so it gets its own
+    prefix and the rest of the service is untouched.
+
+    Every route here is `include_in_schema=False`: the OpenAPI document is what
+    the console's own types are generated from, and static file serving is not
+    part of the contract.
+    """
+    bundle = Path(__file__).resolve().parents[3] / "console" / "dist"
+    if not (bundle / "index.html").is_file():
+        return
+
+    assets = bundle / "assets"
+    if assets.is_dir():
+        app.mount("/console/assets", StaticFiles(directory=assets), name="console-assets")
+
+    @app.get("/console", include_in_schema=False)
+    @app.get("/console/{path:path}", include_in_schema=False)
+    def console(path: str = "") -> FileResponse:
+        # Any path under the prefix returns the shell; the router in the browser
+        # decides what to render. A deep link to /console/alerts/5 has to work,
+        # and the server does not know the client's routes.
+        direct = bundle / path
+        if path and direct.is_file():
+            return FileResponse(direct)
+        return FileResponse(bundle / "index.html")
+
+
+_mount_console()
 
 
 @app.get("/me")
