@@ -135,12 +135,21 @@ step-up. Nothing about it was in the fixtures.
   python scripts/demo_burst.py                                  ingest.v1, end to end
   python scripts/demo_burst.py --http                           through the running API
 
-The same thing in a browser. Not run here, because it needs Node and this
-script's promise is a demoable database in three minutes:
+The same thing in a browser. Not run here — it builds a Node image, and this
+script's promise is a demoable database in three minutes. Nothing above started
+it, which is what the compose profile is for:
 
-  cd console; npm install; npm run dev                          :5173, proxying /api
-  npm test                                                      40 tests
-  npm run build                                                 served at :8000/console
+  docker compose --profile console up -d console                :5173, proxying /api
+  docker compose --profile console run --rm console npm test    40 tests
+  docker compose --profile console run --rm console npm run build   served at :8000/console
+
+Node is not installed on this machine and none of those ask it to be. The
+container reaches the API over the Docker bridge, so serve it as:
+
+  $env:GLASSBOX_HOST='0.0.0.0'; python -m glassbox serve
+
+A loopback bind refuses that connection, and the console reports it exactly as
+it would report a service that is not running.
 
 Sign in with analyst-token or admin-token. Set GLASSBOX_CYCLE_SECONDS
 deliberately first: the default 30 makes rows appear that no click caused.

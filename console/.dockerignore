@@ -1,0 +1,7 @@
+# The build needs package.json, package-lock.json and the entrypoint. Nothing
+# else reaches the image — the source arrives over the bind mount at run time,
+# for the reason the Dockerfile's closing comment gives.
+node_modules/
+dist/
+.vite/
+*.local

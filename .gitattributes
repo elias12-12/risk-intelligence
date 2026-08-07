@@ -1,0 +1,7 @@
+# `console/docker-entrypoint.sh` runs under /bin/sh in a Linux container. A
+# checkout with core.autocrlf=true — the Windows default, and this repository is
+# developed on Windows — would give it CRLF line endings, which /bin/sh reports
+# as a bad interpreter or, more confusingly, carries into the middle of a path.
+# The Dockerfile strips them defensively as well; this is the half that keeps
+# the committed bytes right in the first place.
+*.sh text eol=lf

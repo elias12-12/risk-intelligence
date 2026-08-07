@@ -16,5 +16,53 @@ services:
       timeout: 3s
       retries: 20
 
+  # The console, so that the only thing this project asks of a host is Python
+  # and Docker. Behind a PROFILE, which is the load-bearing part: `bootstrap.ps1`
+  # runs a bare `docker compose up -d` and promises "a demoable database in three
+  # minutes", and a service that joins that command would spend the first of
+  # those minutes building a Node image the script does not need. Nothing here
+  # starts unless it is asked for by name.
+  #
+  #   docker compose --profile console up -d console      # :5173, hot reload
+  #   docker compose --profile console run --rm console npm test
+  #   docker compose --profile console run --rm console npm run build
+  #
+  console:
+    profiles: ["console"]
+    build:
+      context: ./console
+    container_name: glassbox_console
+    ports:
+      - "5173:5173"
+    volumes:
+      # The source, so an edit on the host is the thing Vite serves — and so
+      # `npm run build` writes `console/dist` where `_mount_console` looks for
+      # it, on the host, at :8000/console.
+      - ./console:/app
+      # ...and node_modules NOT from the host, which is the entire point. The
+      # named volume also survives `docker compose down`; `-v` is what empties
+      # it, and the entrypoint will rebuild it from the lockfile.
+      - glassbox_console_modules:/app/node_modules
+    environment:
+      # Where the dev proxy forwards /api. `python -m glassbox serve` runs on
+      # the HOST — this container does not contain Python and is not trying to —
+      # so it is reached over the Docker bridge rather than over loopback.
+      # Set GLASSBOX_HOST=0.0.0.0 for that serve, or the host's 127.0.0.1 bind
+      # refuses the connection. .env.example carries the pairing.
+      GLASSBOX_API: ${GLASSBOX_API:-http://host.docker.internal:8000}
+      # Windows bind mounts do not deliver inotify events into a Linux
+      # container, so the watcher sees nothing and hot reload silently stops
+      # being hot. Polling costs some idle CPU and is the only thing that works
+      # here; unset it if you ever run this on a Linux host.
+      VITE_POLL: "1"
+    extra_hosts:
+      # Docker Desktop resolves host.docker.internal already. This is for Linux,
+      # where it does not exist unless the gateway is named explicitly.
+      - "host.docker.internal:host-gateway"
+    # Vite is started by npm, so PID 1 is a shell that does not forward signals.
+    # Without an init, stopping the service is a ten-second wait for the kill.
+    init: true
+
 volumes:
   glassbox_pgdata:
+  glassbox_console_modules:

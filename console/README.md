@@ -4,20 +4,65 @@ The analyst and admin surfaces, in a browser. It binds to the published
 contracts and **asserts nothing they do not say**.
 
 ```bash
-npm install
-npm run dev          # :5173, proxying /api -> :8000
-npm test             # 40 tests
-npm run build        # -> dist/, served by FastAPI at /console
+docker compose --profile console up -d console          # :5173, proxying /api -> :8000
+docker compose --profile console run --rm console npm test    # 40 tests
+docker compose --profile console run --rm console npm run build   # -> dist/, served at /console
 ```
 
-You need a service to talk to:
+Node is not installed on the host, and nothing here asks you to install it. The
+packages `package-lock.json` pins live in the image and in a named volume; the
+only thing on your disk is this directory and the `dist/` a build writes into
+it. Run the same commands without Docker (`npm install && npm run dev`) if you
+would rather — everything below holds either way.
+
+You need a service to talk to, and **which interface it binds to depends on
+where the console is**:
 
 ```bash
-python -m glassbox serve       # :8000
+python -m glassbox serve                        # :8000 on loopback — console on the host
+GLASSBOX_HOST=0.0.0.0 python -m glassbox serve  # console in the container
 ```
+
+The second is not optional for the containerised console and it is the one
+thing that will not announce itself: the container reaches this process over the
+Docker bridge as `host.docker.internal`, and a socket bound to `127.0.0.1`
+refuses that connection — so every request fails exactly as if the service were
+down. `.env.example` carries the pairing (`GLASSBOX_HOST` and `GLASSBOX_API`,
+which are meaningless apart). Loopback stays the default because this process
+commits to `GLASSBOX_DSN` and `POST /authorize` can decline a charge.
 
 Sign in with `analyst-token` or `admin-token`. Reads are open, so the queue, a
 case, and the KPI tiles all render before you do.
+
+---
+
+## What the container arrangement decides, and why
+
+**`node_modules` is a named volume, never a host bind.** The source is
+bind-mounted so an edit is the thing Vite serves and so `npm run build` writes
+`dist/` where `_mount_console` looks for it — on the host, at
+`:8000/console`. `node_modules` is carved back out of that mount, because
+installing Linux binaries into a Windows working tree is the failure the whole
+exercise exists to avoid.
+
+**The entrypoint reconciles that volume against the lockfile.** Docker seeds a
+named volume from the image the first time it is used and never again, so a
+rebuilt image whose `package-lock.json` had moved would be silently shadowed by
+the previous dependencies — and the first symptom would be a test failing for a
+reason that is not in the diff. `docker-entrypoint.sh` compares an md5 stamp
+written at build time and runs `npm ci` when the two disagree.
+
+**The service sits behind a compose profile.** `bootstrap.ps1` runs a bare
+`docker compose up -d` and promises a demoable database in three minutes; a
+console service that joined that command would spend the first of those minutes
+building a Node image the script does not need. Nothing starts unless it is
+named.
+
+**`VITE_POLL=1` in the compose environment.** A Windows bind mount does not
+deliver inotify events into a Linux container. The watcher registers, nothing
+ever fires, and hot reload stops being hot without one error to say so. Polling
+is the only thing that sees those edits and it costs idle CPU, so it is opt-in
+rather than baked into `vite.config.ts`.
 
 ---
 

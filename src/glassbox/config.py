@@ -16,6 +16,7 @@ CONTRACT_DIR = REPO_ROOT / "contract"
 
 DEFAULT_DSN = "postgresql://glassbox:glassbox@localhost:55432/glassbox"
 DEFAULT_TEST_DSN = "postgresql://glassbox:glassbox@localhost:55432/glassbox_test"
+DEFAULT_SERVE_HOST = "127.0.0.1"
 
 
 def _load_dotenv() -> None:
@@ -40,6 +41,24 @@ def dsn() -> str:
 
 def test_dsn() -> str:
     return os.environ.get("GLASSBOX_TEST_DSN", DEFAULT_TEST_DSN)
+
+
+def serve_host() -> str:
+    """The interface `python -m glassbox serve` binds to.
+
+    Loopback by default, and that default is a position rather than an
+    oversight: this service commits to whatever `GLASSBOX_DSN` points at, runs a
+    background cycle on an interval, and answers `POST /authorize`, which can
+    decline a charge. It does not listen beyond this machine unless somebody
+    says so in an environment variable.
+
+    The reason to say so is the console container. `docker-compose.yml` runs the
+    console with no Python in it, so its dev proxy reaches this process over the
+    Docker bridge — and a socket bound to 127.0.0.1 refuses exactly that, with a
+    connection error that reads like the service is down when it is running
+    fine. `GLASSBOX_HOST=0.0.0.0` is the pairing, and .env.example carries it.
+    """
+    return os.environ.get("GLASSBOX_HOST", DEFAULT_SERVE_HOST)
 
 
 def reference_now() -> datetime:

@@ -53,7 +53,7 @@ python scripts/kpi_report.py                # the nine tiles
 python scripts/case_report.py --alert 5 --citations   # a filing draft, sourced
 
 psql "$GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   # 87 / 68 / 64 / 58 / 0
-pytest                                                    # 454 tests
+pytest                                                    # 604 tests
 python -m glassbox serve                                  # API on :8000, cycle every 30s
 ```
 
@@ -69,15 +69,26 @@ python scripts/demo_burst.py --clean        # take it back out
 And the same thing in a browser:
 
 ```bash
-cd console
-npm install
-npm run dev              # :5173, proxying /api -> :8000; 40 tests via `npm test`
-npm run build            # -> served same-origin at :8000/console
+docker compose --profile console up -d console                     # :5173
+docker compose --profile console run --rm console npm test         # 40 tests
+docker compose --profile console run --rm console npm run build    # -> :8000/console
 ```
+
+Node is never installed on the host: the packages `console/package-lock.json`
+pins live in an image and a named volume, and the source is bind-mounted so an
+edit is the thing Vite serves. `cd console && npm install && npm run dev` still
+works if you would rather have it locally.
+
+One pairing matters, and it fails quietly if you miss it. The container reaches
+the service over the Docker bridge, which a loopback socket refuses — so the API
+has to be started as `GLASSBOX_HOST=0.0.0.0 python -m glassbox serve`, or every
+request from the console fails exactly as though nothing were running.
+`.env.example` carries both halves.
 
 Sign in with `analyst-token` or `admin-token`. Reads are open, so the queue, a
 case and the KPI tiles render before you do. See
-[console/README.md](console/README.md) for what the console holds itself to.
+[console/README.md](console/README.md) for what the console holds itself to and
+what the container arrangement decides.
 
 `verify_scores.sql` keeps its psql meta-commands and must be run with `psql`
 from the repository root. That is deliberate: two execution paths, `psql` for
@@ -568,7 +579,7 @@ and it is worth saying so out loud.
 ## Tests
 
 ```bash
-pytest                       # 454 tests, ~120s including a full rebuild
+pytest                       # 604 tests, ~120s including a full rebuild
 pytest tests/test_degraded.py -v
 
 cd console && npm test       # 40 tests, ~3s

@@ -33,7 +33,15 @@ def main() -> int:
     command, rest = sys.argv[1], sys.argv[2:]
     if command == "serve":
         import uvicorn
-        uvicorn.run("glassbox.api.app:app", host="127.0.0.1", port=8000)
+
+        from .config import serve_host
+        # 127.0.0.1 unless GLASSBOX_HOST says otherwise; config.serve_host
+        # carries the argument for the default and the one reason to override
+        # it, which is the console running in a container.
+        host = serve_host()
+        if host != "127.0.0.1":
+            print(f"serving on {host}:8000 — not loopback. This process can decline a charge.")
+        uvicorn.run("glassbox.api.app:app", host=host, port=8000)
         return 0
     if command not in COMMANDS:
         print(f"unknown command {command!r}", file=sys.stderr)
