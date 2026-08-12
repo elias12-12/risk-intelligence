@@ -52,8 +52,16 @@ if (-not $SkipDocker) {
     # `level=warning msg="No services to build"` on a perfectly healthy bring-up.
     # The container starts and the script dies. Check the exit code, which is
     # the only thing that actually reports failure here.
+    #
+    # `up -d db`, naming the service. This used to be a bare `up -d` that
+    # started the database and nothing else, because every other service was
+    # behind a profile. Session 6 removed the console's profile and added `init`
+    # and `api`, so a bare `up` now builds two images and rebuilds the database —
+    # which is the right default for `docker compose up` and the wrong one for a
+    # script whose next twelve steps do that work on the host. Naming the
+    # service keeps this script's promise: a demoable database in three minutes.
     $ErrorActionPreference = 'Continue'
-    docker compose up -d
+    docker compose up -d db
     $composeOk = ($LASTEXITCODE -eq 0)
     $ErrorActionPreference = $oldErrorAction
     if (-not $composeOk) { throw "docker compose up -d failed with exit code $LASTEXITCODE." }
@@ -79,24 +87,13 @@ python -m pip install -q -r requirements.txt
 # under scripts/ add src/ to sys.path themselves and run without it.
 python -m pip install -q -e .
 
-Step 'Fixtures'
-python scripts/generate_synthetic.py
-
-Step 'Database — migrate, seed, load, compute features'
-python scripts/reset_db.py
-
-Step 'Decisioning — both lanes'
-python scripts/run_cycle.py --lane inline_sync
-python scripts/run_cycle.py --lane async
-
-Step 'Actions — settle outcomes, disposition cases'
-python scripts/resolve_actions.py
-
-# The loop that closes: the system's own actions become an input to the next
-# decision. challenge_failed events exist only after the step above, so the
-# feature has to be recomputed before a cycle can read it.
-Step 'Feature loop — the system reads its own actions'
-python scripts/run_features.py --no-graph --feature card_challenge_fails_30d
+# Fixtures, database, both lanes, settled actions, and the feature that closes
+# the loop — five steps that used to be spelled out here and are now one script.
+# `docker compose`'s init service runs the same sequence, and a second copy of it
+# in a compose command would be a second answer to "what does a built GlassBox
+# look like", drifting silently the way the four verdict CTEs did.
+Step 'Build — fixtures, database, decisioning, actions'
+python scripts/bootstrap_demo.py
 
 Step 'Condition performance — §10'
 python scripts/condition_report.py
@@ -136,20 +133,29 @@ step-up. Nothing about it was in the fixtures.
   python scripts/demo_burst.py --http                           through the running API
 
 The same thing in a browser. Not run here — it builds a Node image, and this
-script's promise is a demoable database in three minutes. Nothing above started
-it, which is what the compose profile is for:
+script's promise is a demoable database in three minutes.
 
-  docker compose --profile console up -d console                :5173, proxying /api
-  docker compose --profile console run --rm console npm test    40 tests
-  docker compose --profile console run --rm console npm run build   served at :8000/console
+  docker compose up -d console                                  :5173, proxying /api
+  docker compose run --rm console npm test                      43 tests
+  docker compose run --rm console npm run build                 served at :8000/console
 
-Node is not installed on this machine and none of those ask it to be. The
-container reaches the API over the Docker bridge, so serve it as:
+Node is not installed on this machine and none of those ask it to be. That
+console talks to the `api` SERVICE by default. To point it at the API running on
+this host instead, serve it on all interfaces and say so:
 
   $env:GLASSBOX_HOST='0.0.0.0'; python -m glassbox serve
+  $env:GLASSBOX_API='http://host.docker.internal:8000'; docker compose up -d console
 
 A loopback bind refuses that connection, and the console reports it exactly as
 it would report a service that is not running.
+
+Or skip all of the above — everything this script just did, in one command, on a
+machine that needs nothing but Docker:
+
+  docker compose up
+
+It rebuilds the database every time, which is what makes the demo identical
+every time and is also why a rule you authored last night will not be there.
 
 Sign in with analyst-token or admin-token. Set GLASSBOX_CYCLE_SECONDS
 deliberately first: the default 30 makes rows appear that no click caused.

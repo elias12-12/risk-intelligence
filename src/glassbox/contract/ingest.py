@@ -275,6 +275,34 @@ class CycleReport(BaseModel):
     duration_ms: Decimal | None = None
 
 
+class RescoreReport(BaseModel):
+    """A full-population pass over one lane, against the rules as they stand now.
+
+    A SIBLING OF CycleReport, not a widening of it, because the two answer
+    different questions and `CycleReport`'s fields would have to lie to carry
+    this one. A cycle reports `since` — the window it consumed — and the counts
+    from the cluster and feature stages it ran on the way. A re-score has no
+    window by construction (that is the entire point: it ignores watermarks) and
+    runs neither of those stages. Published through CycleReport it would report
+    `since: null, clusters: 0, feature_values: 0`, which reads as "those stages
+    ran and found nothing" rather than "those stages were not part of this", and
+    a payload whose zeros mean absence is the thing this project keeps refusing
+    to ship.
+
+    `totals` is the raw dict `run_lane` returns rather than a fixed set of named
+    counters, for the reason `scripts/run_cycle.py` gives for printing it the
+    same way: a writer that learns to count something new should show up here
+    without an edit. The console renders `evaluations`, `decisions` and `alerts`
+    and ignores the rest.
+    """
+    model_config = STRICT
+
+    lane: Literal["inline_sync", "async"]
+    as_of: datetime
+    totals: dict[str, int] = Field(default_factory=dict)
+    duration_ms: Decimal | None = None
+
+
 # ------------------------------------------------------------------- requests
 class TransactionBatch(BaseModel):
     model_config = OPEN_INPUT

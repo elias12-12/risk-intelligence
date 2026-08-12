@@ -14,8 +14,8 @@
 import type {
   AlertDetail, AlertSummary, AuthorizationOutcome, CaseReport, CaseVerdict,
   CopilotResponse, CycleReport, CycleState, ExecutionRecord, FeatureView,
-  KpiSet, Principal, QueueEntry, ReferenceVocabulary, RuleDetail, RuleDraft,
-  RuleSimulation, RuleSummary, SimulatedDecision, TransactionDraft,
+  KpiSet, Principal, QueueEntry, ReferenceVocabulary, RescoreReport, RuleDetail,
+  RuleDraft, RuleSimulation, RuleSummary, SimulatedDecision, TransactionDraft,
   TransactionSimulation,
 } from './types'
 
@@ -106,7 +106,21 @@ export const api = {
   copilot: (id: number) => request<CopilotResponse>(`/alerts/${id}/copilot`),
   report: (id: number) => request<CaseReport>(`/alerts/${id}/report`),
   verdict: (id: number) => request<CaseVerdict>(`/alerts/${id}/outcome`),
-  kpis: () => request<KpiSet>('/kpis'),
+  /**
+   * The tiles. Both parameters the route accepts are reachable from here.
+   *
+   * Omitted rather than defaulted: `GET /kpis` already defines 7 days and
+   * `reference_now()` as its defaults, and a client that re-states them is a
+   * second place those defaults live. An untouched screen sends neither and
+   * gets exactly the payload it got before this argument existed.
+   */
+  kpis: (opts: { windowDays?: number; asOf?: string } = {}) => {
+    const q = new URLSearchParams()
+    if (opts.windowDays !== undefined) q.set('window_days', String(opts.windowDays))
+    if (opts.asOf) q.set('as_of', opts.asOf)
+    const query = q.toString()
+    return request<KpiSet>(`/kpis${query ? `?${query}` : ''}`)
+  },
 
   // --- the analyst's one write --------------------------------------------
   disposition: (id: number, body: { disposition: string; notes?: string | null; feeds_retrain?: boolean }) =>
@@ -143,4 +157,16 @@ export const api = {
   // --- liveness, and the only source of it (invariant 8) ------------------
   cycleState: () => request<CycleState>('/cycle'),
   runCycle: () => post<CycleReport>('/cycle', {}),
+
+  /**
+   * Re-score every subject in a lane against the rules as they stand now.
+   *
+   * A different verb from `runCycle`, and the distinction is the point: a cycle
+   * consumes what ARRIVED, so on a caught-up database it correctly does nothing
+   * — which is why promoting a rule in this console used to produce no alert and
+   * move no tile. Nothing was broken; there was simply no way to ask the
+   * question "apply this rule to the data we already have".
+   */
+  rescore: (lane: 'inline_sync' | 'async' = 'async') =>
+    post<RescoreReport>(`/cycle/rescore?lane=${lane}`, {}),
 }

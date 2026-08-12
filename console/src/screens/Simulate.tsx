@@ -15,12 +15,42 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { api } from '../api/client'
-import type { SimulatedDecision, TransactionSimulation } from '../api/types'
+import type {
+  ReferenceVocabulary, RuleSummary, SimulatedDecision, TransactionSimulation,
+} from '../api/types'
 import { ErrorNotice, Kv } from '../components/bits'
 import { ActionRow, DecisionFrame, EvidenceBlock } from '../components/DecisionFrame'
 import { EmptyPoolNote, ScoreBar } from '../components/ScoreBar'
 import { when } from '../format'
 import { useSession } from '../session'
+import { useAsync } from '../useAsync'
+
+type Lane = 'inline_sync' | 'async'
+
+/**
+ * Subjects that are known to answer, so the screen does not require guessing an
+ * id that exists AND a lane some rule targets it in.
+ *
+ * Every one is checked against a freshly bootstrapped database; the expectation
+ * beside it is what the engine returned, not what anybody hoped for. They are
+ * FIXTURE ids, which is why they may not appear in `db/` — a test forbids
+ * schema and seeds from naming them, because a fixture id in a migration is a
+ * demo pretending to be a system.
+ */
+const PRESETS: Array<{
+  type: string; id: string; lane: Lane; expect: string; note?: string
+}> = [
+  { type: 'transaction', id: 'TXN-48291', lane: 'inline_sync',
+    expect: '87 · high · challenge' },
+  { type: 'transaction', id: 'TXN-48300', lane: 'inline_sync',
+    expect: '68 · elevated · monitor', note: 'a veto capped it' },
+  { type: 'transaction', id: 'TXN-48251', lane: 'inline_sync',
+    expect: '0 · low · allow', note: 'mitigators consumed the pool' },
+  { type: 'network', id: 'RING-1187', lane: 'async',
+    expect: '64 · elevated · hold' },
+  { type: 'account', id: 'ACC-2201', lane: 'async',
+    expect: '58 · elevated · hold' },
+]
 
 export function SimulateScreen() {
   const { can } = useSession()
@@ -61,18 +91,53 @@ export function SimulateScreen() {
 function SubjectPanel() {
   const [type, setType] = useState('transaction')
   const [id, setId] = useState('TXN-48300')
-  const [lane, setLane] = useState<'inline_sync' | 'async'>('inline_sync')
+  const [lane, setLane] = useState<Lane>('inline_sync')
   const [replay, setReplay] = useState('')
+  const [advanced, setAdvanced] = useState(false)
   const [result, setResult] = useState<SimulatedDecision | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [busy, setBusy] = useState(false)
+
+  // The vocabulary and the control plane, both read rather than hardcoded. The
+  // seven subject types come from the same rows the foreign keys enforce, and
+  // which (type, lane) pairs mean anything comes from the rules themselves.
+  const reference = useAsync<ReferenceVocabulary>(() => api.reference(), [])
+  const rules = useAsync<RuleSummary[]>(() => api.rules(), [])
+
+  const subjectTypes = reference.data?.subject_types ?? []
+
+  /**
+   * Lanes some evaluated rule targets this subject type in.
+   *
+   * THE MAIN FAILURE MODE OF THIS SCREEN. A plan is only produced for a subject
+   * type some rule names IN THAT LANE; anything else comes back
+   * `SubjectNotEvaluable`, which is correct and reads as a broken form.
+   * `network` on `inline_sync` is the one people hit — no inline rule scores a
+   * ring, because a ring is not knowable in fifty milliseconds.
+   */
+  const lanesFor = (t: string): Lane[] => {
+    const found = (rules.data ?? [])
+      .filter((r) => r.subject_type === t && r.evaluated)
+      .map((r) => r.execution_mode as Lane)
+    return [...new Set(found)]
+  }
+
+  const evaluable = lanesFor(type)
+  // Only claimed once the control plane has actually answered. Before that the
+  // list is empty because nothing is known, not because nothing is targeted.
+  const unevaluable = rules.data !== null && evaluable.length > 0
+    && !evaluable.includes(lane)
+
+  const apply = (p: typeof PRESETS[number]) => {
+    setType(p.type); setId(p.id); setLane(p.lane); setResult(null); setError(null)
+  }
 
   const run = async () => {
     setBusy(true)
     try {
       setResult(await api.simulateSubject({
         subject_type: type, subject_id: id, lane,
-        replay_as_of: replay || null,
+        replay_as_of: (advanced && replay) ? replay : null,
       }))
       setError(null)
     } catch (err) { setError(err as Error); setResult(null) } finally { setBusy(false) }
@@ -81,12 +146,41 @@ function SubjectPanel() {
   return (
     <div className="stack">
       <div className="panel">
-        <h2 style={{ marginBottom: 12 }}>Re-derive a stored subject</h2>
+        <h2 style={{ marginBottom: 4 }}>Re-score something we already decided</h2>
+        <p className="tiny dim" style={{ marginBottom: 12 }}>
+          Runs the same engine over existing data. Nothing is saved.
+        </p>
+
         <div className="stack" style={{ gap: 12 }}>
+          <div className="field">
+            <label>Known-good subjects</label>
+            <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+              {PRESETS.map((p) => (
+                <button key={p.id} className="btn" onClick={() => apply(p)}
+                        title={`${p.expect}${p.note ? ` — ${p.note}` : ''}`}>
+                  {p.id}
+                  <span className="dim"> · {p.expect}</span>
+                </button>
+              ))}
+            </div>
+            <div className="tiny dim" style={{ marginTop: 5 }}>
+              Each one was run against a fresh build and reports what the engine
+              actually returned.
+            </div>
+          </div>
+
           <div className="fields">
             <div className="field">
               <label htmlFor="subject_type">Subject type</label>
-              <input id="subject_type" value={type} onChange={(e) => setType(e.target.value)} />
+              <select id="subject_type" value={type}
+                      onChange={(e) => { setType(e.target.value); setResult(null) }}>
+                {/* From `GET /reference` — the same rows the foreign keys
+                    enforce, so this cannot offer a type the engine refuses. */}
+                {subjectTypes.map((s) => (
+                  <option key={s.value} value={s.value}>{s.value}</option>
+                ))}
+                {subjectTypes.length === 0 && <option value={type}>{type}</option>}
+              </select>
             </div>
             <div className="field">
               <label htmlFor="subject_id">Subject id</label>
@@ -95,23 +189,59 @@ function SubjectPanel() {
             <div className="field">
               <label htmlFor="lane">Lane</label>
               <select id="lane" value={lane}
-                      onChange={(e) => setLane(e.target.value as 'inline_sync' | 'async')}>
-                <option value="inline_sync">inline_sync</option>
-                <option value="async">async</option>
+                      onChange={(e) => setLane(e.target.value as Lane)}>
+                {(['inline_sync', 'async'] as Lane[]).map((l) => (
+                  <option key={l} value={l}>
+                    {l}{evaluable.length > 0 && !evaluable.includes(l)
+                      ? ' — no rule scores this subject here' : ''}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
-          <div className="field">
-            <label htmlFor="replay">Replay ceiling (optional)</label>
-            <input id="replay" value={replay} placeholder="2026-01-15T14:07:11Z"
-                   onChange={(e) => setReplay(e.target.value)} />
-            <div className="tiny dim" style={{ marginTop: 5 }}>
-              Set this to a stored decision's <code>decided_at</code> and the
-              answer is <i>what that decision saw</i> rather than what we would
-              say today. That is the audit question the bitemporal feature store
-              exists to make answerable.
+
+          {unevaluable && (
+            <div className="notice warn tiny">
+              No <b>{lane}</b> rule targets a <b>{type}</b>, so the planner has
+              nothing to evaluate and this will come back
+              <code> SubjectNotEvaluable</code>. That is the lane distinction
+              doing its job rather than a missing id:{' '}
+              {evaluable.length === 1
+                ? <>this subject type is scored in <b>{evaluable[0]}</b>.</>
+                : <>it is scored in {evaluable.join(' and ')}.</>}
             </div>
+          )}
+
+          <div>
+            <button className="btn" onClick={() => setAdvanced(!advanced)}>
+              {advanced ? 'Hide' : 'Show'} the replay ceiling
+            </button>
           </div>
+
+          {advanced && (
+            <div className="field">
+              <label htmlFor="replay">Replay ceiling (optional)</label>
+              <input id="replay" value={replay} placeholder="2026-01-15T14:07:11Z"
+                     onChange={(e) => setReplay(e.target.value)} />
+              <div className="tiny dim" style={{ marginTop: 5 }}>
+                <b>Leave blank for today's answer.</b> Set a past date to see what
+                the system actually knew at that moment — useful when data has
+                been corrected since.
+              </div>
+              <div className="notice warn tiny" style={{ marginTop: 8 }}>
+                <b>It will return 0 on this dataset, and that is correct.</b> The
+                ceiling bounds <i>when a feature was computed</i>, not when the
+                event happened. Everything here was computed in one pass at build
+                time, so any ceiling set back in the sample data's own era is
+                before every feature row exists and the engine correctly finds
+                nothing to score. The control becomes meaningful once features
+                have been computed at more than one point in time — which is the
+                audit question it exists for, and not something a fresh build
+                has yet had.
+              </div>
+            </div>
+          )}
+
           <ErrorNotice error={error} />
           <button className="primary" onClick={() => void run()} disabled={busy}>
             {busy ? 'evaluating…' : 'Evaluate'}
@@ -155,6 +285,28 @@ function TransactionPanel() {
     <div className="stack">
       <div className="panel">
         <h2 style={{ marginBottom: 12 }}>A charge that never happened</h2>
+
+        {/* §10. Pre-empts the question this panel always gets — "why didn't the
+            mule-ring rule fire?" — and the answer is not a limitation of the
+            simulator but of what a single charge can possibly show. */}
+        <div className="notice tiny" style={{ marginBottom: 12 }}>
+          <b>Only fast-lane transaction rules can fire here.</b> A single made-up
+          charge is judged the way a card terminal would judge it — on its own, in
+          milliseconds. Patterns that need several transactions to become visible
+          (mule rings, account takeover) run in the slower lane and cannot be
+          triggered by one hypothetical charge.
+        </div>
+
+        <div className="notice warn tiny" style={{ marginBottom: 12 }}>
+          <b>A lone charge has no burst behind it.</b> The scoped feature pass is
+          bounded at this charge's own instant, so a count like{' '}
+          <code>card_cnp_count</code> reads <b>1</b> and not 5 — there is one
+          card-not-present charge in the window, because you just invented it. A
+          rule needing three will not fire on one, which is the rule being right.
+          To see a burst, send five charges twenty seconds apart on the{' '}
+          <Link to="/authorize">Send a charge</Link> screen.
+        </div>
+
         <div className="stack" style={{ gap: 12 }}>
           <div className="field">
             <label htmlFor="draft">Transaction draft</label>

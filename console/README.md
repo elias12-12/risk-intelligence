@@ -4,9 +4,10 @@ The analyst and admin surfaces, in a browser. It binds to the published
 contracts and **asserts nothing they do not say**.
 
 ```bash
-docker compose --profile console up -d console          # :5173, proxying /api -> :8000
-docker compose --profile console run --rm console npm test    # 40 tests
-docker compose --profile console run --rm console npm run build   # -> dist/, served at /console
+docker compose up                             # everything: db, API on :8000, this on :5173
+docker compose up -d console                  # just this, proxying /api -> :8000
+docker compose run --rm console npm test      # 48 tests
+docker compose run --rm console npm run build # -> dist/, served at /console
 ```
 
 Node is not installed on the host, and nothing here asks you to install it. The
@@ -52,11 +53,19 @@ the previous dependencies — and the first symptom would be a test failing for 
 reason that is not in the diff. `docker-entrypoint.sh` compares an md5 stamp
 written at build time and runs `npm ci` when the two disagree.
 
-**The service sits behind a compose profile.** `bootstrap.ps1` runs a bare
-`docker compose up -d` and promises a demoable database in three minutes; a
-console service that joined that command would spend the first of those minutes
-building a Node image the script does not need. Nothing starts unless it is
-named.
+**The service no longer sits behind a compose profile, and has no
+`depends_on`.** It used to be profiled so that `bootstrap.ps1`'s bare
+`docker compose up -d` would not spend its first minute building a Node image
+the script does not need. Session 6 made `docker compose up` bring up the whole
+system, so that argument moved: `bootstrap.ps1` now names the service it wants
+(`up -d db`), which is clearer than a profile that had to be remembered.
+
+The missing `depends_on` is deliberate and was learned the hard way. Vite does
+not talk to the API at boot — it proxies per request — so a dependency on `api`
+buys ordering nobody observes, and costs a great deal: `api` waits for the
+`init` service that rebuilds the database, so `docker compose run --rm console
+npm test` would rebuild the demo database before running 48 tests that never
+touch it.
 
 **`VITE_POLL=1` in the compose environment.** A Windows bind mount does not
 deliver inotify events into a Linux container. The watcher registers, nothing

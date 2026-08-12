@@ -33,27 +33,44 @@ That builds the dataset. To see the system *react* to something rather than
 rebuild around it, `scripts/demo_burst.py` sends five card-not-present charges
 one at a time and the fifth is declined — see **A charge can be stopped** below.
 
-Step by step:
+**Or one command, on a machine with only Docker** — no Python, no Node, no
+virtualenv:
 
 ```bash
-docker compose up -d                        # PostgreSQL 16 on :55432
+docker compose up --build    # database, bootstrap, API on :8000, console on :5173
+```
+
+`init` builds the database and exits; `api` waits for it to **succeed** rather
+than to start, so the service never comes up in front of an empty one. It
+rebuilds every time, which is what makes the demo identical every time — and is
+also why a rule authored through the console in a previous session will not
+survive it. Runtime rules are rows, not seeds; put one in `db/seeds/` if it
+should outlive a rebuild, or bring the stack up without the rebuild:
+
+```bash
+docker compose up db api console            # leave the existing database alone
+docker compose run --rm --no-deps api python scripts/demo_burst.py
+```
+
+Step by step, on a host with Python:
+
+```bash
+docker compose up -d db                     # PostgreSQL 16 on :55432
 cp .env.example .env
 python -m pip install -r requirements.txt
 python -m pip install -e .                  # so `python -m glassbox` resolves
 
-python scripts/generate_synthetic.py        # fixtures/synthetic_data.sql
-python scripts/reset_db.py                  # migrate + seed + load + features
-python scripts/run_cycle.py --lane inline_sync
-python scripts/run_cycle.py --lane async
-python scripts/resolve_actions.py           # settle challenges, disposition cases
-python scripts/run_features.py --no-graph --feature card_challenge_fails_30d
+python scripts/bootstrap_demo.py            # fixtures, database, both lanes,
+                                            # settled actions, and the feature
+                                            # that closes the loop — one script,
+                                            # and the one the container runs too
 python scripts/condition_report.py          # which conditions are mispriced
 python scripts/calibrate_bands.py           # where the band cutoffs should sit
 python scripts/kpi_report.py                # the nine tiles
 python scripts/case_report.py --alert 5 --citations   # a filing draft, sourced
 
 psql "$GLASSBOX_DSN" -f db/acceptance/verify_scores.sql   # 87 / 68 / 64 / 58 / 0
-pytest                                                    # 604 tests
+pytest                                                    # 615 tests
 python -m glassbox serve                                  # API on :8000, cycle every 30s
 ```
 
@@ -69,9 +86,9 @@ python scripts/demo_burst.py --clean        # take it back out
 And the same thing in a browser:
 
 ```bash
-docker compose --profile console up -d console                     # :5173
-docker compose --profile console run --rm console npm test         # 40 tests
-docker compose --profile console run --rm console npm run build    # -> :8000/console
+docker compose up -d console                     # :5173
+docker compose run --rm console npm test         # 48 tests
+docker compose run --rm console npm run build    # -> :8000/console
 ```
 
 Node is never installed on the host: the packages `console/package-lock.json`
@@ -579,10 +596,10 @@ and it is worth saying so out loud.
 ## Tests
 
 ```bash
-pytest                       # 604 tests, ~120s including a full rebuild
+pytest                       # 615 tests, ~120s including a full rebuild
 pytest tests/test_degraded.py -v
 
-cd console && npm test       # 40 tests, ~3s
+docker compose run --rm console npm test   # 48 tests, ~3s
 ```
 
 Tests use the same docker-compose PostgreSQL, in a dedicated `glassbox_test`

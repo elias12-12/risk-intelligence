@@ -700,6 +700,54 @@
       ],
       "title": "IngestReceipt",
       "type": "object"
+    },
+    "RescoreReport": {
+      "additionalProperties": false,
+      "description": "A full-population pass over one lane, against the rules as they stand now.\n\nA SIBLING OF CycleReport, not a widening of it, because the two answer\ndifferent questions and `CycleReport`'s fields would have to lie to carry\nthis one. A cycle reports `since` — the window it consumed — and the counts\nfrom the cluster and feature stages it ran on the way. A re-score has no\nwindow by construction (that is the entire point: it ignores watermarks) and\nruns neither of those stages. Published through CycleReport it would report\n`since: null, clusters: 0, feature_values: 0`, which reads as \"those stages\nran and found nothing\" rather than \"those stages were not part of this\", and\na payload whose zeros mean absence is the thing this project keeps refusing\nto ship.\n\n`totals` is the raw dict `run_lane` returns rather than a fixed set of named\ncounters, for the reason `scripts/run_cycle.py` gives for printing it the\nsame way: a writer that learns to count something new should show up here\nwithout an edit. The console renders `evaluations`, `decisions` and `alerts`\nand ignores the rest.",
+      "properties": {
+        "as_of": {
+          "format": "date-time",
+          "title": "As Of",
+          "type": "string"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "lane": {
+          "enum": [
+            "inline_sync",
+            "async"
+          ],
+          "title": "Lane",
+          "type": "string"
+        },
+        "totals": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Totals",
+          "type": "object"
+        }
+      },
+      "required": [
+        "lane",
+        "as_of"
+      ],
+      "title": "RescoreReport",
+      "type": "object"
     }
   },
   "$id": "https://glassbox.local/contract/ingest.v1.schema.json",

@@ -39,7 +39,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 import psycopg
 from pydantic import BaseModel, ConfigDict, Field
@@ -52,6 +52,7 @@ from ..engine.conditions import (
     NUMERIC_OPERATORS,
     SUPPORTED_OPERATORS,
 )
+from ..engine.precedence import VETO_DIRECTION, VETO_EMITTED_REASON_CODES
 
 STRICT = ConfigDict(extra="forbid", frozen=True)
 
@@ -223,6 +224,36 @@ class NamedValue(BaseModel):
     description: str | None = None
 
 
+class ReasonCodeValue(BaseModel):
+    """A reason code, with the plain-language gloss and which way it argues.
+
+    `direction` is DERIVED from what prices the code, never stored beside it:
+
+      * `aggravating` / `mitigating` — every `rule_conditions` row that can cite
+        this code prices it upward, or every one prices it downward. The sign of
+        `contribution_points` is the whole derivation.
+      * `both` — conditions disagree. No code does this today; the value exists
+        because nothing prevents it, and a category silently folded into
+        "aggravating" would be a lie the moment somebody authored one.
+      * `veto` — emitted by the veto pass rather than by any priced condition
+        (`engine/precedence.py`). No rule prices these, so the condition-based
+        derivation cannot see them at all.
+      * `null` — the vocabulary knows the word and no rule cites it. An honest
+        gap rather than a default.
+
+    Why it is published: an audience shown only aggravating codes concludes the
+    system only argues one way, and the mitigating half is the most under-sold
+    thing in the demo. The console needs to mark them, and the alternative — a
+    list of four codes typed into a screen — is a second definition of which way
+    a code argues, disagreeing with the rules the day one is repriced.
+    """
+    model_config = STRICT
+
+    value: str
+    description: str | None = None
+    direction: Literal["aggravating", "mitigating", "both", "veto"] | None = None
+
+
 class ActionValue(BaseModel):
     model_config = STRICT
 
@@ -254,11 +285,55 @@ class ReferenceVocabulary(BaseModel):
     actions: list[ActionValue] = Field(default_factory=list)
     subject_types: list[NamedValue] = Field(default_factory=list)
     execution_modes: list[NamedValue] = Field(default_factory=list)
-    reason_codes: list[NamedValue] = Field(default_factory=list)
+    reason_codes: list[ReasonCodeValue] = Field(default_factory=list)
     rule_statuses: list[str] = Field(default_factory=lambda: list(RULE_STATUSES))
     combine_values: list[str] = Field(default_factory=lambda: list(COMBINE_VALUES))
     aggregations: list[str] = Field(default_factory=list)
     source_relations: list[str] = Field(default_factory=list)
+
+
+# Every reason code, with the counts that decide which way it argues.
+#
+# A condition cites its own `reason_code` when it has one and otherwise inherits
+# the feature's `default_reason_code`, so the COALESCE here is the same
+# resolution the engine performs — deriving from one of the two columns would
+# classify a code correctly right up until an author overrode it on a condition.
+_REASON_CODE_SQL = """
+WITH cited AS (
+    SELECT COALESCE(rc.reason_code, f.default_reason_code) AS reason_code,
+           rc.contribution_points                          AS points
+      FROM rule_conditions rc
+      LEFT JOIN feature_catalog f ON f.feature_key = rc.feature_key
+),
+priced AS (
+    SELECT reason_code,
+           count(*) FILTER (WHERE points <  0) AS down,
+           count(*) FILTER (WHERE points >= 0) AS up
+      FROM cited
+     WHERE reason_code IS NOT NULL
+     GROUP BY reason_code
+)
+SELECT r.reason_code, r.description,
+       COALESCE(p.down, 0) AS down,
+       COALESCE(p.up,   0) AS up
+  FROM ref_reason_code r
+  LEFT JOIN priced p ON p.reason_code = r.reason_code
+ ORDER BY r.reason_code
+"""
+
+
+def _reason_direction(row: dict) -> str | None:
+    """Which way a reason code argues, from what prices it. See ReasonCodeValue."""
+    if row["reason_code"] in VETO_EMITTED_REASON_CODES:
+        return VETO_DIRECTION
+    down, up = row["down"], row["up"]
+    if not down and not up:
+        return None               # nothing cites it — say so rather than guess
+    if not down:
+        return "aggravating"
+    if not up:
+        return "mitigating"
+    return "both"
 
 
 _OPERATOR_HELP: dict[str, tuple[str, str]] = {
@@ -494,10 +569,9 @@ def read_reference(conn: psycopg.Connection) -> ReferenceVocabulary:
                 conn, "SELECT mode, description FROM ref_execution_mode ORDER BY mode")
         ],
         reason_codes=[
-            NamedValue(value=r["reason_code"], description=r["description"])
-            for r in fetch_all(
-                conn, "SELECT reason_code, description FROM ref_reason_code "
-                      "ORDER BY reason_code")
+            ReasonCodeValue(value=r["reason_code"], description=r["description"],
+                            direction=_reason_direction(r))
+            for r in fetch_all(conn, _REASON_CODE_SQL)
         ],
         aggregations=sorted(REDUCERS),
         source_relations=sorted(ALLOWED_RELATIONS),

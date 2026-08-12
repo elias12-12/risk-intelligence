@@ -196,6 +196,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cycle/rescore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rescore Population
+         * @description Run every active rule over every subject in the lane, ignoring watermarks.
+         *
+         *     THE VERB A NEWLY PROMOTED RULE NEEDS, and it did not exist. A rule authored
+         *     in the console, simulated, published and promoted produced no alerts and
+         *     moved no KPI, and both halves of the reason were correct behaviour:
+         *     `GET /cycle` is a status read that evaluates nothing, and `POST /cycle`
+         *     consumes what has ARRIVED — with every watermark at the frontier it reports
+         *     "nothing has arrived since the last cycle" and stops, which is exactly right.
+         *     The cycle reacts to data, not to rules. A new rule is not new data.
+         *
+         *     NOT A FLAG ON `POST /cycle`. "Consume what arrived" and "re-score everything
+         *     against the rules as they stand now" are different questions, and this
+         *     project's precedent for two meanings is two endpoints — `/authorize` against
+         *     `/simulate/transaction`, and the two ingest doors this module opens with. A
+         *     `POST /cycle?full=true` would be one query parameter away from a scheduled
+         *     tick silently re-scoring the population every thirty seconds.
+         *
+         *     Synchronous, because it was measured rather than assumed: the async lane's
+         *     full population is 169 subjects in ~0.3s and the inline lane's is ~9,850 in
+         *     ~13s. A spinner covers both; a job id and a polling console would be
+         *     machinery bought for a wait that does not exist.
+         *
+         *     The watermark is advanced exactly as `scripts/run_cycle.py` advances it, and
+         *     for the same reason — a hand-run lane and a scheduled one leave the same
+         *     state, so the next background tick sees a population it has consumed rather
+         *     than one it re-scores from scratch.
+         *
+         *     AS_OF IS THE LATER OF `reference_now()` AND THE FRONTIER, which
+         *     `scripts/run_cycle.py` is not, and the difference is not cosmetic. `as_of`
+         *     is what binds the point-in-time feature read, so a re-score at
+         *     `reference_now()` on a database whose newest charge arrived AFTER it
+         *     evaluates every subject as of an instant before that charge existed — the
+         *     demo burst, or anything else that came in through `/authorize`, is simply
+         *     invisible to the rules being re-applied. That is the exact failure this
+         *     endpoint exists to fix, one layer down. The script gets away with it because
+         *     it takes `--as-of` and is run by someone who knows the dataset; a button
+         *     cannot ask.
+         */
+        post: operations["rescore_population_cycle_rescore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/features": {
         parameters: {
             query?: never;
@@ -1745,6 +1801,38 @@ export interface components {
             worked_by_analyst: boolean;
         };
         /**
+         * ReasonCodeValue
+         * @description A reason code, with the plain-language gloss and which way it argues.
+         *
+         *     `direction` is DERIVED from what prices the code, never stored beside it:
+         *
+         *       * `aggravating` / `mitigating` — every `rule_conditions` row that can cite
+         *         this code prices it upward, or every one prices it downward. The sign of
+         *         `contribution_points` is the whole derivation.
+         *       * `both` — conditions disagree. No code does this today; the value exists
+         *         because nothing prevents it, and a category silently folded into
+         *         "aggravating" would be a lie the moment somebody authored one.
+         *       * `veto` — emitted by the veto pass rather than by any priced condition
+         *         (`engine/precedence.py`). No rule prices these, so the condition-based
+         *         derivation cannot see them at all.
+         *       * `null` — the vocabulary knows the word and no rule cites it. An honest
+         *         gap rather than a default.
+         *
+         *     Why it is published: an audience shown only aggravating codes concludes the
+         *     system only argues one way, and the mitigating half is the most under-sold
+         *     thing in the demo. The console needs to mark them, and the alternative — a
+         *     list of four codes typed into a screen — is a second definition of which way
+         *     a code argues, disagreeing with the rules the day one is repriced.
+         */
+        ReasonCodeValue: {
+            /** Description */
+            description?: string | null;
+            /** Direction */
+            direction?: ("aggravating" | "mitigating" | "both" | "veto") | null;
+            /** Value */
+            value: string;
+        };
+        /**
          * ReferenceVocabulary
          * @description Every vocabulary an authoring UI needs, from the rows that enforce it.
          *
@@ -1765,7 +1853,7 @@ export interface components {
             /** Operators */
             operators?: components["schemas"]["OperatorValue"][];
             /** Reason Codes */
-            reason_codes?: components["schemas"]["NamedValue"][];
+            reason_codes?: components["schemas"]["ReasonCodeValue"][];
             /** Rule Statuses */
             rule_statuses?: string[];
             /** Source Relations */
@@ -1782,6 +1870,45 @@ export interface components {
             index: number;
             /** Reasons */
             reasons?: string[];
+        };
+        /**
+         * RescoreReport
+         * @description A full-population pass over one lane, against the rules as they stand now.
+         *
+         *     A SIBLING OF CycleReport, not a widening of it, because the two answer
+         *     different questions and `CycleReport`'s fields would have to lie to carry
+         *     this one. A cycle reports `since` — the window it consumed — and the counts
+         *     from the cluster and feature stages it ran on the way. A re-score has no
+         *     window by construction (that is the entire point: it ignores watermarks) and
+         *     runs neither of those stages. Published through CycleReport it would report
+         *     `since: null, clusters: 0, feature_values: 0`, which reads as "those stages
+         *     ran and found nothing" rather than "those stages were not part of this", and
+         *     a payload whose zeros mean absence is the thing this project keeps refusing
+         *     to ship.
+         *
+         *     `totals` is the raw dict `run_lane` returns rather than a fixed set of named
+         *     counters, for the reason `scripts/run_cycle.py` gives for printing it the
+         *     same way: a writer that learns to count something new should show up here
+         *     without an edit. The console renders `evaluations`, `decisions` and `alerts`
+         *     and ignores the rest.
+         */
+        RescoreReport: {
+            /**
+             * As Of
+             * Format: date-time
+             */
+            as_of: string;
+            /** Duration Ms */
+            duration_ms?: string | null;
+            /**
+             * Lane
+             * @enum {string}
+             */
+            lane: "inline_sync" | "async";
+            /** Totals */
+            totals?: {
+                [key: string]: number;
+            };
         };
         /** RuleDetail */
         RuleDetail: {
@@ -2885,6 +3012,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CycleReport"];
+                };
+            };
+        };
+    };
+    rescore_population_cycle_rescore_post: {
+        parameters: {
+            query?: {
+                lane?: "inline_sync" | "async";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RescoreReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

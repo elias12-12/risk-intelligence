@@ -127,6 +127,10 @@ export function RuleAuthorScreen() {
     () => (features.data ?? []).map((f) => f.feature_key).sort(),
     [features.data])
 
+  const featureByKey = useMemo(
+    () => Object.fromEntries((features.data ?? []).map((f) => [f.feature_key, f])),
+    [features.data])
+
   if (!can('admin')) {
     return (
       <div className="page">
@@ -299,6 +303,27 @@ export function RuleAuthorScreen() {
                         <option value="">choose…</option>
                         {featureKeys.map((k) => <option key={k} value={k}>{k}</option>)}
                       </select>
+                      {/* What the feature MEANS and whether it can be observed
+                          absent — moved here from the catalog table (§11),
+                          because this is the one screen where the distinction
+                          changes what you write. A mitigator may only cite a
+                          feature with no default; seeing which is which while
+                          choosing beats being refused by the validator after. */}
+                      {featureByKey[c.feature_key] && (
+                        <div className="tiny dim" style={{ marginTop: 5 }}>
+                          {featureByKey[c.feature_key].description}
+                          <div style={{ marginTop: 3 }}>
+                            {featureByKey[c.feature_key].has_default
+                              ? <>defaults to{' '}
+                                  <span className="mono">
+                                    {JSON.stringify(featureByKey[c.feature_key].default_when_absent)}
+                                  </span>{' '}
+                                  when missing — so it can never be observed absent,
+                                  and a mitigator may not cite it</>
+                              : <b>no default — observable as absent, so a mitigator may cite it</b>}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="field">
                       <label htmlFor={`op-${i}`}>Operator</label>

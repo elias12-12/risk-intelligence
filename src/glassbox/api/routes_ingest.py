@@ -19,11 +19,14 @@ without a commit, which is a rollback.
 """
 from __future__ import annotations
 
+import time
 from decimal import Decimal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from .. import scheduler as scheduler_mod
+from ..config import reference_now
 from ..contract.ingest import (
     AuthorizationOutcome,
     AuthorizationRequest,
@@ -33,11 +36,12 @@ from ..contract.ingest import (
     IngestReceipt,
     LinkBatch,
     Rejected,
+    RescoreReport,
     TransactionBatch,
 )
 from ..contract.models import Action, Evidence, Signal, Subject, is_contract_violation
 from ..db import connect
-from ..engine.evaluation import EngineContext
+from ..engine.evaluation import EngineContext, run_lane
 from ..engine.persist import ranked_signals
 from ..ingest import arrivals, watermark
 from ..ingest.authorize import NoInlineRules, authorize, executions_for, routing_for
@@ -139,6 +143,58 @@ def run_one_cycle(who: Principal = Depends(require_role("admin"))):
             since=result.since, clusters=result.clusters,
             feature_values=result.feature_values, lanes=result.lanes,
             duration_ms=_ms(result.duration_ms))
+
+
+@router.post("/cycle/rescore", response_model=RescoreReport)
+def rescore_population(lane: Literal["inline_sync", "async"] = "async",
+                       who: Principal = Depends(require_role("admin"))):
+    """Run every active rule over every subject in the lane, ignoring watermarks.
+
+    THE VERB A NEWLY PROMOTED RULE NEEDS, and it did not exist. A rule authored
+    in the console, simulated, published and promoted produced no alerts and
+    moved no KPI, and both halves of the reason were correct behaviour:
+    `GET /cycle` is a status read that evaluates nothing, and `POST /cycle`
+    consumes what has ARRIVED — with every watermark at the frontier it reports
+    "nothing has arrived since the last cycle" and stops, which is exactly right.
+    The cycle reacts to data, not to rules. A new rule is not new data.
+
+    NOT A FLAG ON `POST /cycle`. "Consume what arrived" and "re-score everything
+    against the rules as they stand now" are different questions, and this
+    project's precedent for two meanings is two endpoints — `/authorize` against
+    `/simulate/transaction`, and the two ingest doors this module opens with. A
+    `POST /cycle?full=true` would be one query parameter away from a scheduled
+    tick silently re-scoring the population every thirty seconds.
+
+    Synchronous, because it was measured rather than assumed: the async lane's
+    full population is 169 subjects in ~0.3s and the inline lane's is ~9,850 in
+    ~13s. A spinner covers both; a job id and a polling console would be
+    machinery bought for a wait that does not exist.
+
+    The watermark is advanced exactly as `scripts/run_cycle.py` advances it, and
+    for the same reason — a hand-run lane and a scheduled one leave the same
+    state, so the next background tick sees a population it has consumed rather
+    than one it re-scores from scratch.
+
+    AS_OF IS THE LATER OF `reference_now()` AND THE FRONTIER, which
+    `scripts/run_cycle.py` is not, and the difference is not cosmetic. `as_of`
+    is what binds the point-in-time feature read, so a re-score at
+    `reference_now()` on a database whose newest charge arrived AFTER it
+    evaluates every subject as of an instant before that charge existed — the
+    demo burst, or anything else that came in through `/authorize`, is simply
+    invisible to the rules being re-applied. That is the exact failure this
+    endpoint exists to fix, one layer down. The script gets away with it because
+    it takes `--as-of` and is run by someone who knows the dataset; a button
+    cannot ask.
+    """
+    started = time.perf_counter()
+    with connect() as conn:
+        as_of = max(filter(None, (reference_now(), watermark.frontier(conn))))
+        totals = run_lane(conn, lane, as_of, run_id=f"rescore{int(time.time())}",
+                          subject_ids=None, ctx=EngineContext.load(conn))
+        watermark.advance(conn, lane, as_of)
+        conn.commit()
+    return RescoreReport(lane=lane, as_of=as_of, totals=totals,
+                         duration_ms=_ms((time.perf_counter() - started) * 1000))
 
 
 @router.get("/cycle")

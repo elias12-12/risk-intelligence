@@ -1,14 +1,173 @@
 # Handoff — GlassBox
 
-**Status:** Week 5 complete. The system now has a write path, a publish step, an
-arrival door that can stop a charge, a scheduler, and a console in a browser.
-Every numbered item of `architecture.md` Part I has been **DONE** since Week 4.
-**Verified against:** PostgreSQL 16 (docker-compose), **454 Python tests and 40
-console tests green**, `alert.v1`'s digest unmoved since Week 2.
+**Status:** Session 6 complete — demo readiness. The system had every capability
+it needed and could not be shown: the control a promoted rule needed did not
+exist, four views disagreed about a case's verdict, and running it took four
+terminals. **Verified against:** PostgreSQL 16 (docker-compose), **615 Python
+tests and 48 console tests green**, `alert.v1`'s digest unmoved since Week 2.
 
-**Next:** there is no Week 6 plan. What is worth doing next is in §W5.7, and the
-first item is not a feature: **there is still no CI**, and there are now two
-suites and two package managers that only run when a human runs them.
+**Next:** the first item is still not a feature: **there is still no CI**, and
+there are now two suites and two package managers that only run when a human
+runs them. `docker compose up` makes that cheaper to fix than it was.
+
+---
+
+# Session 6 — demo readiness
+
+`SESSION6-PLAN.md` is the input. Two items were defects found by querying the
+live database; the rest were places where the surface was correct and
+unpresentable. Every §number below is that plan's.
+
+## S6.1 The two defects
+
+**§1 — a promoted rule had no verb, and nothing said so.** Two rules were
+authored, simulated, published and promoted through the console. No alert
+appeared and no KPI moved. Both halves of the reason were correct behaviour:
+`GET /cycle` is a status read that evaluates nothing, and `POST /cycle` consumes
+what has ARRIVED — on a caught-up database it reports "nothing has arrived since
+the last cycle" and stops. The cycle reacts to data. A new rule is not data.
+`scripts/run_cycle.py --lane async` was the operation that would have worked,
+from a terminal, on a machine with Python.
+
+`POST /cycle/rescore?lane=` is the missing verb: a full-population pass that
+ignores watermarks, admin-only, published as `RescoreReport` — a SIBLING of
+`CycleReport` rather than a widening of it, because a re-score has no `since` and
+runs neither the cluster nor the feature stage, and reporting those as zeros
+would say "they ran and found nothing".
+
+Synchronous, because it was measured rather than assumed: **async is 169
+subjects in ~0.3s; inline_sync is ~9,850 in ~13s.** The plan's ~9,900 figure was
+the inline lane. A job id and a polling console would be machinery bought for a
+wait that does not exist.
+
+One thing the tests found that the plan did not anticipate: `as_of` must be the
+LATER of `reference_now()` and the frontier. `as_of` binds the point-in-time
+read, so a re-score at `reference_now()` on a database whose newest charge
+arrived after it — anything through `/authorize`, including the demo burst —
+evaluates every subject as of an instant before that charge existed. That is this
+endpoint's own bug one layer down.
+
+**§2 — four views disagreed about a case's verdict.** Week 5 moved `v_kpi_cases`
+to latest-wins so an analyst could correct the synthetic settler, and did not
+move the three views that had COPIED its verdict CTE. For eight weeks,
+dispositioning a case moved the false-positive rate, validation outcomes and
+median triage while per-rule precision, prevention FP/TP and condition precision
+stayed frozen on the script's original verdict. Half a screen responded.
+
+**The fix is an edit to the three view files, not a seed** — which is the
+opposite of what the plan proposed, and `migrate.py` settles it: views are
+re-applied on EVERY run and applied LAST, so a seed redefining them would be
+overwritten seconds later in the same migrate. `migrate.py:41-51` says as much —
+"a view is edited in place; there is no `v_kpi_cases_2.sql`". The append-only
+rule for `db/` covers migrations and seeds, not view definitions.
+
+`tests/test_dispositions.py` gained three tests, and they were checked by
+reverting one view and watching them fail. Two assert the DATA agrees; the third
+asserts the SOURCE does, comparing the four copies of the CTE against each other.
+The defect was duplication drifting, and only the third one catches it before it
+reaches a screen.
+
+## S6.2 One command
+
+`docker compose up` brings up database, bootstrap, API and console on a machine
+with only Docker. `Dockerfile` at the root builds one image; `init` runs
+`scripts/bootstrap_demo.py` and exits, `api` waits for it to SUCCEED rather than
+to start.
+
+`scripts/bootstrap_demo.py` is new and is the point: fixtures, database, both
+lanes, settled actions, and the feature that closes the loop — five steps that
+lived only in `bootstrap.ps1`, which is PowerShell and cannot run in a container.
+A second copy of them in a compose command would have been a second answer to
+"what does a built GlassBox look like", drifting exactly as the four verdict CTEs
+did. `bootstrap.ps1` now calls it.
+
+**The database is rebuilt on every `up`**, by decision. Identical demo every
+time; the cost is that runtime rules do not survive one. `RF-401` and `C-301`
+were authored through the console and exist in no seed file.
+
+Three things that would each have looked like the service being down:
+`GLASSBOX_HOST=0.0.0.0` is mandatory in a container; the in-network DSN is
+`db:5432` while the published `55432` keeps host tooling and `pytest` working
+unchanged; and the console's `GLASSBOX_API` becomes `http://api:8000`.
+
+**The console service has no `depends_on`, deliberately.** It proxies per request
+rather than talking to the API at boot, so a dependency buys ordering nobody
+observes — and costs a rebuilt database every time somebody runs
+`docker compose run --rm console npm test`. Found by doing exactly that. Ad-hoc
+commands against `api` want `--no-deps` for the same reason.
+
+## S6.3 What the screens gained
+
+**§5 KPI window controls.** `GET /kpis` already accepted `window_days` and
+`as_of`; the console simply never sent them. Neither is sent until touched, so an
+untouched screen produces the byte-identical payload it did before. Setting the
+window to 30 and watching every delta correctly disappear — with the payload's
+own `baseline_absent_reason` printed — is the demo beat. (The plan said that
+reason was dropped by the console; it was already rendered.)
+
+**§6 tile copy, console-side.** `requires` is no longer rendered — it stays on
+the wire, because removing a published field to tidy a screen is a contract
+change — and `basis` is replaced by two lines: what the tile means, and how it
+was computed. `console/src/copy/tiles.ts` is the one place this console writes
+words of its own about a number, and it is fenced: keyed on `tile.key` with the
+payload as fallback, so a tenth tile added server-side explains itself on the day
+it ships. Caveats are rewritten, never dropped, and the derived provenance note
+keeps its counts.
+
+**§7 reason codes.** `ref_reason_code.description` was already populated and
+already published. What was missing was DIRECTION, and it is now derived rather
+than listed: a code is mitigating when every `rule_conditions` row that can cite
+it prices it downward. `VETO_APPLIED` and `DEGRADED_EVIDENCE` come from the veto
+pass and no condition prices them, so `engine/precedence.py` now names them as
+constants and the catalog reads those. A list of four codes typed into a screen
+would have disagreed with the rules the first time one was repriced.
+
+**§8 the replay ceiling is not broken.** The plan asked whether the placeholder
+text fails to parse. It parses; the endpoint returns 200. The real finding is
+worse and more interesting: **1 of 186,733 feature rows has `computed_at` at or
+before the sample data's era.** Everything was computed in one pass at build
+time, so any ceiling set back in the fixtures' own period is before every feature
+row exists and the engine correctly finds nothing — score 0, every time. The
+control is correct and unusable on a freshly built database. It is behind an
+"advanced" toggle with that explanation, and the backend parameter is untouched:
+it is the audit capability, not a live-demo control.
+
+**§13 three scenarios, one call site.** The burst, the veto and ordinary traffic.
+The charges are rendered as a table BEFORE anything is sent — the details are the
+argument, and a decline whose charge nobody saw looks arbitrary. Scenarios 2 and
+3 were verified against the real committing endpoint on a fresh build: the veto
+returns `approved / 0 / allow` with `VETO_APPLIED`, and ordinary traffic returns
+`approved / 0` with no signals at all. `console.test.ts` pins `api.authorize(` to
+exactly one occurrence in one file.
+
+There is deliberately no "clean up" button. This console has no endpoint that
+erases raw capture, and adding one to tidy a demo would be the first thing in the
+system that can make a committed charge stop having happened.
+`scripts/demo_burst.py --clean` remains the way.
+
+## S6.4 Three things to know before changing this
+
+**The plan's §16 notes are partly stale, and the live database had moved.** By
+the time the work started, `RF-401` and `C-301` HAD fired (something had been run
+against the dev database), there were 13 alerts rather than 7, and the frontier
+sat past the watermarks. The code findings were unaffected — `GET /cycle` is
+still a read, and there was still no full-population endpoint — but the evidence
+sections describe a database that had moved on. The claim that `WALKTHROUGH.md`
+says T-021's aggravator is +50 does not hold either: the walkthrough's only `+50`
+is a correct historical reference to the misprice that was found.
+
+**`test_walkthrough.py` will fail on a line number you moved.** It did, three
+times, for edits nowhere near the documentation: adding constants to
+`precedence.py` and a model to `catalog.py` shifted `decide()`, `RuleDraft` and
+`read_reference()`. 150 of the 615 tests are that file.
+
+**Two contracts changed, both additively.** `ingest.v1` gained `RescoreReport`;
+`catalog.v1` gained `ReasonCodeValue`. `alert.v1`'s bytes have not moved.
+Regenerate with `scripts/export_contract_schema.py`, then
+`scripts/export_openapi.py`, then `npm run types` — in that order, and commit all
+three, in the same commit.
+
+---
 
 Newest week first. Each week's account is left as it was written; where a later
 week moved something, the later account says so rather than editing the earlier

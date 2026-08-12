@@ -330,7 +330,7 @@ authoritative statement of it. Stages map to Part 1's steps as noted.
 | 5 | **Score per rule** (step 8) | `engine/scoring.py` — [`score_rule()`](src/glassbox/engine/scoring.py#L18) | Computed **before** deduplication, deliberately — otherwise a rule's authority over the action would depend on dedup ordering. |
 | 6 | **Consolidate** (step 9) | `engine/consolidate.py` — [`consolidate()`](src/glassbox/engine/consolidate.py#L21) | One signal per `(feature_key, direction)`, keeping the largest magnitude; `asserted_by_rules` remembers every claimant. **A pool that does not net positive is dropped whole.** |
 | 7 | **Band** | `engine/bands.py` — [`band_for()`](src/glassbox/engine/bands.py#L13) | Reads the `score_bands` table. Recalibration is an `UPDATE`, not a release. |
-| 8 | **Precedence** (step 10) | `engine/precedence.py` — [`decide()`](src/glassbox/engine/precedence.py#L33) | Veto → authority → severity → prevention → cap, in that fixed order. A shadow rule reaches this stage and is denied authority in it. |
+| 8 | **Precedence** (step 10) | `engine/precedence.py` — [`decide()`](src/glassbox/engine/precedence.py#L46) | Veto → authority → severity → prevention → cap, in that fixed order. A shadow rule reaches this stage and is denied authority in it. |
 | 9 | **Persist** (step 12) | `engine/persist.py` — [`write_batch()`](src/glassbox/engine/persist.py#L76) | One decision, always. The condition ledger, always. An alert only if a rule had authority. |
 | 10 | **Route** (step 13) | `engine/persist.py` — [`_route_alert()`](src/glassbox/engine/persist.py#L131) | `raised` / `folded` / `restated` / `suppressed` / `no_authority`. Every decision says what became of it — this is the denominator "alert volume" needs. |
 | 11 | **Issue** (step 14) | `engine/execute.py` — [`write_executions()`](src/glassbox/engine/execute.py#L78) | Preventive actions on a **raised** case only; notifications also on a restatement. |
@@ -406,7 +406,7 @@ you change a model *and* re-run the exporter.
 | `explanation.v1` | [`answer_chips()`](src/glassbox/explain/copilot.py#L44) | The copilot answers and the case report. |
 | `dispositions.v1` | [`CaseVerdict`](src/glassbox/contract/dispositions.py#L72) | An analyst's verdict, including the correction history, so a client never re-derives it. |
 | `simulation.v1` | [`SimulatedDecision`](src/glassbox/contract/simulation.py#L86) | All three what-ifs, each publishing `persisted: false` on the wire so a caller never infers it from the URL. |
-| `catalog.v1` | [`RuleDraft`](src/glassbox/contract/catalog.py#L531) | The control plane as data: rules, features, and the reference vocabulary from [`read_reference()`](src/glassbox/contract/catalog.py#L462) that populates an authoring form. |
+| `catalog.v1` | [`RuleDraft`](src/glassbox/contract/catalog.py#L605) | The control plane as data: rules, features, and the reference vocabulary from [`read_reference()`](src/glassbox/contract/catalog.py#L537) that populates an authoring form. |
 | `ingest.v1` | [`AuthorizationOutcome`](src/glassbox/contract/ingest.py#L186) | The two doors and the cycle. |
 
 **"Sibling, not successor"** is the rule that keeps this workable. Eight contracts
@@ -659,14 +659,32 @@ python scripts/demo_burst.py --http         # the same, through a running servic
 python scripts/demo_burst.py --clean        # take it back out
 ```
 
-**The console**, which runs in Docker so that Node is never installed on the
-host:
+**Everything at once**, on a machine that has Docker and nothing else — no
+Python, no Node, no virtualenv. This is the shortest path to a running demo:
 
 ```bash
-docker compose --profile console up -d console                     # :5173
-docker compose --profile console run --rm console npm test         # 40 tests
-docker compose --profile console run --rm console npm run build    # -> :8000/console
+docker compose up --build    # database, bootstrap, API on :8000, console on :5173
 ```
+
+`init` runs `scripts/bootstrap_demo.py` — the same five steps `bootstrap.ps1`
+runs on a host — and `api` waits for it to **succeed** rather than to start, so
+the service never comes up in front of an empty database. It **rebuilds the
+database every time**, which is what makes the demo identical every time and is
+also why a rule you authored through the console last night will not be there:
+runtime rules are rows, not seeds.
+
+**The console alone**, which runs in Docker so that Node is never installed on
+the host:
+
+```bash
+docker compose up -d console                     # :5173
+docker compose run --rm console npm test         # 48 tests
+docker compose run --rm console npm run build    # -> :8000/console
+```
+
+The console has no `depends_on`, deliberately: it proxies per request rather
+than talking to the API at boot, and inheriting `api`'s bootstrap would mean
+running the console's test suite rebuilt the demo database first.
 
 Sign in with `analyst-token` or `admin-token`. Reads are open, so the queue, a
 case and the KPI tiles render before you do.
@@ -699,13 +717,13 @@ count on both invariants. The five signed-off cases:
 Then:
 
 ```bash
-pytest                                                          # 604 tests, ~2 min
-docker compose --profile console run --rm console npm test      # 40 tests, ~3s
+pytest                                                # 615 tests, ~2 min
+docker compose run --rm console npm test              # 48 tests, ~3s
 ```
 
-150 of that 604 are `test_walkthrough.py` checking this document's own links, one
+150 of that 615 are `test_walkthrough.py` checking this document's own links, one
 parametrised case per link — so the total moves when this file does, and the
-number to watch is the 454 that test the system.
+number to watch is the 465 that test the system.
 
 The Python suite drops and rebuilds a **separate** database at session start,
 runs the whole pipeline once, then runs each test inside a transaction that is

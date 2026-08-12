@@ -95,12 +95,35 @@ export function RuleDetailScreen() {
       <div className="split">
         <div className="stack">
           <div className="panel">
-            <h2 style={{ marginBottom: 12 }}>Conditions</h2>
+            <h2 style={{ marginBottom: 4 }}>Conditions</h2>
+
+            {/* §12. Replaces the server's PERFORMANCE_BASIS as the primary
+                explanation — "precision_pct is direction-aware ... and HIGH IS
+                BAD" is exactly right and is written for whoever maintains the
+                view. The string still rides on catalog.v1 and is still rendered
+                under each table, as the technical record. */}
+            <p className="tiny dim" style={{ marginBottom: 4 }}>
+              <b>How each condition is performing.</b> Every condition of every
+              rule that applied, whether it fired or not.
+            </p>
+            <p className="tiny dim" style={{ marginBottom: 4 }}>
+              A condition that adds points is right when it fires on fraud. A
+              condition that <i>subtracts</i> points is right when it fires on
+              legitimate activity — that is its job — so it is scored the other
+              way round. Higher precision is better for both.
+            </p>
+            <p className="tiny dim" style={{ marginBottom: 12 }}>
+              ⚠️ Measured against fraud we planted in this sample data. Exact
+              here, meaningless anywhere else.
+            </p>
+
             {(r.condition_set ?? []).length === 0 ? <Empty>No conditions.</Empty> : (
               <div className="stack" style={{ gap: 10 }}>
                 {(r.condition_set ?? []).map((c) => <Condition key={c.condition_id} c={c} />)}
               </div>
             )}
+
+            <ColumnHelp />
             <div className="tiny dim" style={{ marginTop: 12 }}>
               Combined with <b>{r.combine}</b>
               {r.combine === 'AND' && ' across condition groups — a rule whose '
@@ -188,9 +211,60 @@ export function RuleDetailScreen() {
   )
 }
 
+/**
+ * Below ~30 evaluations a rate is not a measurement.
+ *
+ * Seed 0026 makes exactly this argument when it refuses to anchor a reprice on
+ * `device_first_seen_min` — 36 firings, all of them on planted fixtures. A row
+ * reading `Evaluated 1 · Fired 1 · Precision 100%` on the same screen as one
+ * reading `Evaluated 9,844` invites the reader to treat them alike.
+ */
+const LOW_SAMPLE = 30
+
+/** What each column of the performance table means. */
+const COLUMN_HELP: Array<[string, string]> = [
+  ['Evaluated', 'How many decisions looked at this condition'],
+  ['Fired', 'How many times it was true'],
+  ['Fire rate', 'Fired ÷ Evaluated — how much of the population it touches'],
+  ['Fired on fraud', 'Of the times it fired, how many were on known fraud. '
+    + 'Reads "Fired on legitimate" for a mitigating condition — the header flips, '
+    + 'because that is what a mitigator should do'],
+  ['Precision', 'How often it was right. Adds points: % of firings on fraud. '
+    + 'Subtracts points: % on legitimate. Higher is better either way'],
+  ['Pts / precision pt', 'What this condition charges per unit of accuracy. '
+    + 'High is bad — the points are not being earned'],
+  ['Degraded', 'How many times the evidence was missing or too old to use'],
+]
+
+function ColumnHelp() {
+  return (
+    <details style={{ marginTop: 14 }}>
+      <summary className="tiny dim" style={{ cursor: 'pointer' }}>
+        What the performance columns mean
+      </summary>
+      <div className="stack" style={{ gap: 4, marginTop: 8 }}>
+        {COLUMN_HELP.map(([col, help]) => (
+          <div key={col} className="tiny">
+            <b>{col}</b> <span className="dim">— {help}</span>
+          </div>
+        ))}
+      </div>
+      <div className="tiny dim" style={{ marginTop: 10 }}>
+        <b>Pts / precision pt found a real defect.</b>{' '}
+        <span className="id">country_is_new_for_customer</span> was priced at +50
+        and scored 7.4 — 4.4× the next aggravator. The +50 turned out to have been
+        reverse-engineered from a screenshot to make a total add up. It was
+        repriced to +12 in <span className="mono">db/seeds/0026_reprice_country_novelty.sql</span>,
+        with the evidence in the comment. This column is what found it.
+      </div>
+    </details>
+  )
+}
+
 function Condition({ c }: { c: ConditionView }) {
   const p = c.performance
   const mitigating = c.direction === 'mitigating'
+  const thin = p !== null && p !== undefined && p.evaluated < LOW_SAMPLE
   return (
     <div className="panel" style={{ background: 'var(--panel-2)' }}>
       <div className="spread">
@@ -222,7 +296,14 @@ function Condition({ c }: { c: ConditionView }) {
             {c.performance_absent_because ?? 'No measurement.'}
           </div>
         ) : (
-          <div className="scroll-x">
+          <div className={`scroll-x ${thin ? 'thin-sample' : ''}`}>
+            {thin && (
+              <div className="tiny dim" style={{ marginBottom: 6 }}>
+                ⚠ {p.evaluated} evaluation{p.evaluated === 1 ? '' : 's'} — too few
+                to be a measurement. Every rate below is quoted with its
+                denominator for this reason.
+              </div>
+            )}
             <table>
               <thead>
                 <tr>

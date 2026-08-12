@@ -48,8 +48,14 @@ WITH verdict AS (
     -- One row per alert. case_outcomes has no uniqueness constraint, so joining
     -- it raw would fan the fire-rate DENOMINATOR out by the number of
     -- dispositions and quietly deflate every rate in this view.
+    --
+    -- Session 6: latest-wins, `decided_at DESC`. This was first-wins, left behind
+    -- when Week 5 moved v_kpi_cases, which meant condition precision — the column
+    -- that found the country_is_new_for_customer mispricing — could not be
+    -- corrected by an analyst. See v_kpi_rule_attribution.sql for the evidence.
     SELECT alert_id,
-           (array_agg(disposition ORDER BY decided_at, outcome_id))[1] AS disposition
+           (array_agg(disposition ORDER BY decided_at DESC, outcome_id DESC))[1]
+               AS disposition
       FROM case_outcomes
      GROUP BY alert_id
 ),

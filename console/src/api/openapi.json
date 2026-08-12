@@ -3006,6 +3006,49 @@
         "title": "QueueEntry",
         "type": "object"
       },
+      "ReasonCodeValue": {
+        "additionalProperties": false,
+        "description": "A reason code, with the plain-language gloss and which way it argues.\n\n`direction` is DERIVED from what prices the code, never stored beside it:\n\n  * `aggravating` / `mitigating` \u2014 every `rule_conditions` row that can cite\n    this code prices it upward, or every one prices it downward. The sign of\n    `contribution_points` is the whole derivation.\n  * `both` \u2014 conditions disagree. No code does this today; the value exists\n    because nothing prevents it, and a category silently folded into\n    \"aggravating\" would be a lie the moment somebody authored one.\n  * `veto` \u2014 emitted by the veto pass rather than by any priced condition\n    (`engine/precedence.py`). No rule prices these, so the condition-based\n    derivation cannot see them at all.\n  * `null` \u2014 the vocabulary knows the word and no rule cites it. An honest\n    gap rather than a default.\n\nWhy it is published: an audience shown only aggravating codes concludes the\nsystem only argues one way, and the mitigating half is the most under-sold\nthing in the demo. The console needs to mark them, and the alternative \u2014 a\nlist of four codes typed into a screen \u2014 is a second definition of which way\na code argues, disagreeing with the rules the day one is repriced.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "enum": [
+                  "aggravating",
+                  "mitigating",
+                  "both",
+                  "veto"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "ReasonCodeValue",
+        "type": "object"
+      },
       "ReferenceVocabulary": {
         "additionalProperties": false,
         "description": "Every vocabulary an authoring UI needs, from the rows that enforce it.\n\nThe point of serving this rather than hardcoding it in the console: these are\nthe same values `rules/validate.py` rejects against, and the same rows the\nforeign keys enforce. A dropdown built from anything else is a dropdown that\ncan offer an option the validator refuses.",
@@ -3047,7 +3090,7 @@
           },
           "reason_codes": {
             "items": {
-              "$ref": "#/components/schemas/NamedValue"
+              "$ref": "#/components/schemas/ReasonCodeValue"
             },
             "title": "Reason Codes",
             "type": "array"
@@ -3097,6 +3140,50 @@
           "index"
         ],
         "title": "Rejected",
+        "type": "object"
+      },
+      "RescoreReport": {
+        "additionalProperties": false,
+        "description": "A full-population pass over one lane, against the rules as they stand now.\n\nA SIBLING OF CycleReport, not a widening of it, because the two answer\ndifferent questions and `CycleReport`'s fields would have to lie to carry\nthis one. A cycle reports `since` \u2014 the window it consumed \u2014 and the counts\nfrom the cluster and feature stages it ran on the way. A re-score has no\nwindow by construction (that is the entire point: it ignores watermarks) and\nruns neither of those stages. Published through CycleReport it would report\n`since: null, clusters: 0, feature_values: 0`, which reads as \"those stages\nran and found nothing\" rather than \"those stages were not part of this\", and\na payload whose zeros mean absence is the thing this project keeps refusing\nto ship.\n\n`totals` is the raw dict `run_lane` returns rather than a fixed set of named\ncounters, for the reason `scripts/run_cycle.py` gives for printing it the\nsame way: a writer that learns to count something new should show up here\nwithout an edit. The console renders `evaluations`, `decisions` and `alerts`\nand ignores the rest.",
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "lane": {
+            "enum": [
+              "inline_sync",
+              "async"
+            ],
+            "title": "Lane",
+            "type": "string"
+          },
+          "totals": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Totals",
+            "type": "object"
+          }
+        },
+        "required": [
+          "lane",
+          "as_of"
+        ],
+        "title": "RescoreReport",
         "type": "object"
       },
       "RuleDetail": {
@@ -5653,6 +5740,51 @@
           }
         },
         "summary": "Run One Cycle"
+      }
+    },
+    "/cycle/rescore": {
+      "post": {
+        "description": "Run every active rule over every subject in the lane, ignoring watermarks.\n\nTHE VERB A NEWLY PROMOTED RULE NEEDS, and it did not exist. A rule authored\nin the console, simulated, published and promoted produced no alerts and\nmoved no KPI, and both halves of the reason were correct behaviour:\n`GET /cycle` is a status read that evaluates nothing, and `POST /cycle`\nconsumes what has ARRIVED \u2014 with every watermark at the frontier it reports\n\"nothing has arrived since the last cycle\" and stops, which is exactly right.\nThe cycle reacts to data, not to rules. A new rule is not new data.\n\nNOT A FLAG ON `POST /cycle`. \"Consume what arrived\" and \"re-score everything\nagainst the rules as they stand now\" are different questions, and this\nproject's precedent for two meanings is two endpoints \u2014 `/authorize` against\n`/simulate/transaction`, and the two ingest doors this module opens with. A\n`POST /cycle?full=true` would be one query parameter away from a scheduled\ntick silently re-scoring the population every thirty seconds.\n\nSynchronous, because it was measured rather than assumed: the async lane's\nfull population is 169 subjects in ~0.3s and the inline lane's is ~9,850 in\n~13s. A spinner covers both; a job id and a polling console would be\nmachinery bought for a wait that does not exist.\n\nThe watermark is advanced exactly as `scripts/run_cycle.py` advances it, and\nfor the same reason \u2014 a hand-run lane and a scheduled one leave the same\nstate, so the next background tick sees a population it has consumed rather\nthan one it re-scores from scratch.\n\nAS_OF IS THE LATER OF `reference_now()` AND THE FRONTIER, which\n`scripts/run_cycle.py` is not, and the difference is not cosmetic. `as_of`\nis what binds the point-in-time feature read, so a re-score at\n`reference_now()` on a database whose newest charge arrived AFTER it\nevaluates every subject as of an instant before that charge existed \u2014 the\ndemo burst, or anything else that came in through `/authorize`, is simply\ninvisible to the rules being re-applied. That is the exact failure this\nendpoint exists to fix, one layer down. The script gets away with it because\nit takes `--as-of` and is run by someone who knows the dataset; a button\ncannot ask.",
+        "operationId": "rescore_population_cycle_rescore_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lane",
+            "required": false,
+            "schema": {
+              "default": "async",
+              "enum": [
+                "inline_sync",
+                "async"
+              ],
+              "title": "Lane",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RescoreReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rescore Population"
       }
     },
     "/features": {

@@ -3,6 +3,14 @@ import { describe, expect, it } from 'vitest'
 
 import { KpiWindow, TileView } from './Tile'
 import type { KpiSet, KpiTile } from '../api/types'
+import { TILE_COPY } from '../copy/tiles'
+
+/** `contract/kpis.py`'s constant, verbatim. If the server rewords it this test
+ *  fails, which is the point: the console's rewrite is keyed on the text. */
+const SYNTHETIC_GROUND_TRUTH =
+  'Measured against transactions.synthetic_label — fraud this repository planted. '
+  + 'Exact on this dataset and meaningless beyond it. In production recall is not '
+  + 'measurable without a random-sample audit of unalerted traffic.'
 
 function tile(over: Partial<KpiTile> = {}): KpiTile {
   return {
@@ -28,12 +36,52 @@ function tile(over: Partial<KpiTile> = {}): KpiTile {
 }
 
 describe('KPI tiles', () => {
-  it('renders the payload\'s own basis and caveat rather than copy of its own', () => {
-    const t = tile()
+  it('explains a known tile in plain language rather than in its basis string', () => {
+    // Session 6 §6. The payload's `basis` is written for whoever maintains the
+    // view; `requires` names the internal milestone that made the tile possible.
+    // Both stay on the wire — `requires` is part of kpis.v1 — and neither is
+    // what an audience should be reading.
+    render(<TileView tile={tile()} />)
+    expect(screen.getByText(TILE_COPY.false_negative_rate.means)).toBeInTheDocument()
+    expect(screen.getByText(TILE_COPY.false_negative_rate.computed)).toBeInTheDocument()
+    expect(screen.queryByText(/requires/)).not.toBeInTheDocument()
+  })
+
+  it('falls back to the payload when it has never heard of the tile', () => {
+    // The fallback is the whole reason the copy is keyed rather than positional:
+    // a tenth tile added server-side arrives explaining itself.
+    const t = tile({ key: 'a_tile_from_the_future' })
     render(<TileView tile={t} />)
     expect(screen.getByText(t.basis)).toBeInTheDocument()
-    expect(screen.getByText(new RegExp(t.caveat!))).toBeInTheDocument()
-    expect(screen.getByText(`requires ${t.requires}`)).toBeInTheDocument()
+  })
+
+  it('keeps every caveat, in plainer words', () => {
+    const t = tile({ caveat: SYNTHETIC_GROUND_TRUTH })
+    render(<TileView tile={t} />)
+    expect(screen.getByText(/We planted this fraud/)).toBeInTheDocument()
+    expect(screen.queryByText(/transactions\.synthetic_label/)).not.toBeInTheDocument()
+  })
+
+  it('rewrites a caveat it does not recognise to itself', () => {
+    // Rewrites are replacements over the string, so an unrecognised sentence
+    // passes through unchanged. A caveat that could be dropped by failing to
+    // match is worse than an ugly one.
+    const t = tile({ caveat: 'something the console has never seen' })
+    render(<TileView tile={t} />)
+    expect(screen.getByText(/something the console has never seen/)).toBeInTheDocument()
+  })
+
+  it('keeps the derived counts in the provenance note', () => {
+    // 0029's argument: the note is DERIVED because a hardcoded one became false
+    // the moment a real analyst wrote a verdict. Plainer words, same numbers.
+    const t = tile({
+      synthetic: true,
+      caveat: "4 of 7 dispositioned cases in this window carry a verdict written by "
+        + "scripts/resolve_actions.py rather than by an analyst; 3 carry a person's.",
+    })
+    render(<TileView tile={t} />)
+    expect(screen.getByText(/4 of 7 verdicts here were written by a script/))
+      .toBeInTheDocument()
   })
 
   it('never shows a rate without its denominator', () => {

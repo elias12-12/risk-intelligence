@@ -34,7 +34,7 @@ from fastapi import Depends, HTTPException, Request
 # analyst < admin. The index in this tuple IS the ordering.
 ROLES: tuple[str, ...] = ("analyst", "admin")
 
-DEFAULT_TOKENS = "analyst-token:nadia.analyst:analyst,admin-token:omar.admin:admin"
+DEFAULT_TOKENS = "analyst-token:jane.analyst:analyst,admin-token:joe.admin:admin"
 
 
 @dataclass(frozen=True)

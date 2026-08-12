@@ -61,8 +61,8 @@ def _an_alert_id(client) -> int:
 def test_roles_are_ordered_not_a_set():
     """Two demo users. `admin` can do everything `analyst` can, and a set-valued
     permission model would be modelling a problem this does not have."""
-    analyst = Principal(actor="nadia.analyst", role="analyst")
-    admin = Principal(actor="omar.admin", role="admin")
+    analyst = Principal(actor="jane.analyst", role="analyst")
+    admin = Principal(actor="joe.admin", role="admin")
     assert analyst.can("analyst") and not analyst.can("admin")
     assert admin.can("analyst") and admin.can("admin")
 
@@ -71,9 +71,9 @@ def test_me_names_the_actor_and_the_role(client):
     """The console needs this before it can decide whether to render the admin
     surfaces at all."""
     assert client.get("/me", headers=ANALYST).json() == {
-        "actor": "nadia.analyst", "role": "analyst"}
+        "actor": "jane.analyst", "role": "analyst"}
     assert client.get("/me", headers=ADMIN).json() == {
-        "actor": "omar.admin", "role": "admin"}
+        "actor": "joe.admin", "role": "admin"}
 
 
 @pytest.mark.parametrize("headers", [
@@ -112,7 +112,7 @@ def test_a_disposition_records_the_authenticated_actor(client, clean_outcomes):
     assert verdict.verdict == "false_positive"
     assert verdict.verdict_source == "analyst"
     assert verdict.worked_by_analyst is True
-    assert verdict.history[0].analyst_id == "nadia.analyst"
+    assert verdict.history[0].analyst_id == "jane.analyst"
 
     # And it is readable without a token, like everything else that is a read.
     fetched = CaseVerdict.model_validate(
@@ -137,7 +137,7 @@ def test_an_admin_may_also_disposition(client, clean_outcomes):
     response = client.post(f"/alerts/{alert_id}/outcome", headers=ADMIN,
                            json={"disposition": "inconclusive"})
     assert response.status_code == 201
-    assert response.json()["history"][0]["analyst_id"] == "omar.admin"
+    assert response.json()["history"][0]["analyst_id"] == "joe.admin"
 
 
 def test_a_disposition_outside_the_vocabulary_is_422(client):

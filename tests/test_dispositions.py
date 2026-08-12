@@ -12,6 +12,7 @@ string, which is a claim a payload makes about itself and never rechecks.
 """
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 
 import psycopg
@@ -27,7 +28,7 @@ from glassbox.contract.kpis import read_kpis
 from glassbox.contract.queue import read_queue
 from glassbox.db import fetch_all, fetch_one, fetch_value
 
-ANALYST = "nadia.analyst"
+ANALYST = "jane.analyst"
 
 
 def _any_alert(conn) -> int:
@@ -244,3 +245,131 @@ def test_a_fully_human_window_carries_no_synthetic_caveat_at_all(conn):
     outcomes = _tile(read_kpis(conn), "validation_outcomes")
     assert outcomes.caveat is None
     assert outcomes.synthetic is False
+
+
+# ------------------------------------------- Session 6 §2: the views agree
+#
+# Week 5 moved `v_kpi_cases` to latest-wins and left the three views that had
+# COPIED its verdict CTE on first-wins. For eight weeks, dispositioning a case
+# moved the false-positive rate, validation outcomes and median triage while
+# per-rule precision, prevention FP/TP and condition precision stayed frozen on
+# whatever the synthetic settler had written — a half-responsive screen, in the
+# direction that made a correction look ignored.
+#
+# Two tests, because the defect has two faces. One asserts the DATA agrees. The
+# other asserts the SOURCE does: the mechanism here is a CTE duplicated four
+# times on purpose, and duplication that drifted once will drift again the next
+# time someone edits one copy.
+
+VERDICT_VIEWS = ("v_kpi_cases", "v_kpi_rule_attribution", "v_kpi_executions")
+
+
+def _alert_in_every_verdict_view(conn) -> int:
+    """A case all three disposition-carrying views actually have a row for.
+
+    `v_kpi_executions` is keyed on an issued action and `v_kpi_rule_attribution`
+    on a rule that asserted evidence, so neither covers every alert. Picking
+    `min(alert_id)` would let this test pass by finding nothing to disagree with.
+    """
+    row = fetch_one(conn, """
+        SELECT c.alert_id AS a
+          FROM v_kpi_cases c
+         WHERE EXISTS (SELECT 1 FROM v_kpi_rule_attribution r
+                        WHERE r.alert_id = c.alert_id)
+           AND EXISTS (SELECT 1 FROM v_kpi_executions x
+                        WHERE x.alert_id = c.alert_id)
+         ORDER BY c.alert_id
+         LIMIT 1
+    """)
+    assert row and row["a"] is not None, "no case is covered by all three views"
+    return row["a"]
+
+
+def _verdicts_reported_by(conn, view: str, alert_id: int) -> set[str]:
+    # `view` comes from VERDICT_VIEWS, never from a caller's input.
+    return {r["disposition"] for r in fetch_all(
+        conn, f"SELECT DISTINCT disposition FROM {view} WHERE alert_id = %s",
+        (alert_id,))}
+
+
+def _alert_precision(conn, condition_ids: list[int]) -> dict[int, object]:
+    return {r["condition_id"]: r["alert_precision_pct"] for r in fetch_all(
+        conn,
+        "SELECT condition_id, alert_precision_pct FROM v_condition_performance "
+        "WHERE condition_id = ANY(%s)", (condition_ids,))}
+
+
+def test_all_the_verdict_views_report_the_later_disposition(conn):
+    """Two dispositions, opposite verdicts, one case — every view says the same.
+
+    This is the assertion that was false in the shipped build: `v_kpi_cases`
+    answered `false_positive` while the other two answered `confirmed_fraud`.
+    """
+    alert_id = _alert_in_every_verdict_view(conn)
+
+    write_disposition(conn, alert_id,
+                      DispositionRequest(disposition="confirmed_fraud"), actor=ANALYST)
+    write_disposition(conn, alert_id,
+                      DispositionRequest(disposition="false_positive",
+                                         notes="second look: legitimate"),
+                      actor=ANALYST)
+
+    for view in VERDICT_VIEWS:
+        assert _verdicts_reported_by(conn, view, alert_id) == {"false_positive"}, (
+            f"{view} still reports an earlier verdict — its copy of the verdict "
+            f"CTE has drifted back to first-wins")
+
+
+def test_condition_precision_notices_an_analysts_correction(conn):
+    """`v_condition_performance` aggregates, so it carries no `disposition`
+    column to compare. The verdict reaches it through `alert_precision_pct`, and
+    that is what has to move.
+
+    Flipping confirmed_fraud → false_positive leaves `fired_on_cases` alone (both
+    are verdicts) and drops `fired_on_confirmed` by one for every condition that
+    fired on this case, so precision must fall. Under first-wins nothing moves at
+    all, which is the failure this catches.
+    """
+    alert_id = _alert_in_every_verdict_view(conn)
+    fired = [r["condition_id"] for r in fetch_all(conn, """
+        SELECT DISTINCT dc.condition_id
+          FROM decision_conditions dc
+          JOIN decisions d ON d.decision_id = dc.decision_id
+         WHERE d.alert_id = %s AND dc.fired
+    """, (alert_id,))]
+    assert fired, "the chosen case fired no conditions, so there is nothing to measure"
+
+    write_disposition(conn, alert_id,
+                      DispositionRequest(disposition="confirmed_fraud"), actor=ANALYST)
+    before = _alert_precision(conn, fired)
+    write_disposition(conn, alert_id,
+                      DispositionRequest(disposition="false_positive"), actor=ANALYST)
+    after = _alert_precision(conn, fired)
+
+    assert before != after, (
+        "v_condition_performance did not notice the correction — its verdict CTE "
+        "has drifted back to first-wins")
+    assert all(after[c] <= before[c] for c in before
+               if before[c] is not None and after[c] is not None), (
+        "a case moving from fraud to false positive cannot raise precision")
+
+
+def test_every_copy_of_the_verdict_cte_orders_the_same_way():
+    """The source-level half, and the one that would have caught this in Week 5.
+
+    Four views carry their own copy of the verdict CTE — deliberately, because a
+    view that DROPs cannot be replaced while another depends on it. That
+    duplication is fine as long as something checks the copies still agree.
+    Nothing did. This does.
+    """
+    pattern = re.compile(r"array_agg\(disposition ORDER BY ([^)]+)\)")
+    orderings: dict[str, set[str]] = {}
+    for name in VERDICT_VIEWS + ("v_condition_performance",):
+        sql = (config.VIEWS_DIR / f"{name}.sql").read_text(encoding="utf-8")
+        found = {" ".join(m.split()) for m in pattern.findall(sql)}
+        assert found, f"{name} no longer contains a verdict CTE this test can read"
+        orderings[name] = found
+
+    distinct = set().union(*orderings.values())
+    assert distinct == {"decided_at DESC, outcome_id DESC"}, (
+        f"the verdict CTE has drifted between view files: {orderings}")

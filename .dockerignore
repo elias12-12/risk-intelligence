@@ -1,0 +1,25 @@
+# The context is the repository root, and most of it is not the service.
+.git
+.venv
+venv
+__pycache__
+**/__pycache__
+*.py[cod]
+.pytest_cache
+*.egg-info
+build
+dist
+
+# Node's, and the console image's problem rather than this one's.
+console/node_modules
+console/dist
+
+# The generated fixtures are ~2.6 MB of INSERTs and are gitignored; the init
+# service regenerates them inside the container from a fixed seed. Shipping a
+# host-built copy into the image would make the container's data depend on
+# whether somebody had run the generator on their laptop.
+fixtures/synthetic_data.sql
+
+# Local configuration. The compose file sets what the containers need, and a
+# host .env pointing at localhost:55432 would be wrong inside the network.
+.env

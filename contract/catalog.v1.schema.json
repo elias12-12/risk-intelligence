@@ -315,6 +315,51 @@
           ],
           "title": "OperatorValue",
           "type": "object"
+        },
+        "ReasonCodeValue": {
+          "additionalProperties": false,
+          "description": "A reason code, with the plain-language gloss and which way it argues.\n\n`direction` is DERIVED from what prices the code, never stored beside it:\n\n  * `aggravating` / `mitigating` — every `rule_conditions` row that can cite\n    this code prices it upward, or every one prices it downward. The sign of\n    `contribution_points` is the whole derivation.\n  * `both` — conditions disagree. No code does this today; the value exists\n    because nothing prevents it, and a category silently folded into\n    \"aggravating\" would be a lie the moment somebody authored one.\n  * `veto` — emitted by the veto pass rather than by any priced condition\n    (`engine/precedence.py`). No rule prices these, so the condition-based\n    derivation cannot see them at all.\n  * `null` — the vocabulary knows the word and no rule cites it. An honest\n    gap rather than a default.\n\nWhy it is published: an audience shown only aggravating codes concludes the\nsystem only argues one way, and the mitigating half is the most under-sold\nthing in the demo. The console needs to mark them, and the alternative — a\nlist of four codes typed into a screen — is a second definition of which way\na code argues, disagreeing with the rules the day one is repriced.",
+          "properties": {
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Description"
+            },
+            "direction": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "aggravating",
+                    "mitigating",
+                    "both",
+                    "veto"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Direction"
+            },
+            "value": {
+              "title": "Value",
+              "type": "string"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "ReasonCodeValue",
+          "type": "object"
         }
       },
       "additionalProperties": false,
@@ -357,7 +402,7 @@
         },
         "reason_codes": {
           "items": {
-            "$ref": "#/$defs/NamedValue"
+            "$ref": "#/$defs/ReasonCodeValue"
           },
           "title": "Reason Codes",
           "type": "array"

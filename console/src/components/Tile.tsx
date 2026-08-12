@@ -16,9 +16,16 @@
  * the one kind of KPI that is worse than no KPI.
  */
 import { duration, when, whenShort } from '../format'
-import type { KpiSet, KpiTile } from '../api/types'
+import type { KpiSet, KpiTile, ReasonCodeValue } from '../api/types'
+import { TILE_COPY, plainCaveat } from '../copy/tiles'
 
-export function TileView({ tile }: { tile: KpiTile }) {
+/** Reason code → its published gloss and direction, from `GET /reference`. */
+export type ReasonCodes = Record<string, ReasonCodeValue>
+
+export function TileView({ tile, reasonCodes }: {
+  tile: KpiTile
+  reasonCodes?: ReasonCodes
+}) {
   return (
     <div className="tile">
       <div className="tile-label">{tile.label}</div>
@@ -37,20 +44,41 @@ export function TileView({ tile }: { tile: KpiTile }) {
 
       {tile.parts && tile.parts.length > 0 && (
         <div className="tile-parts">
-          {tile.parts.map((p) => (
-            <div className="tile-part" key={p.label}>
-              <span>{p.label}</span>
-              <b>
-                {p.value === null || p.value === undefined ? '—' : format(String(p.value), p.unit)}
-                {p.numerator !== null && p.numerator !== undefined
-                  && p.denominator !== null && p.denominator !== undefined && (
-                  <span className="dim" style={{ fontWeight: 400 }}>
-                    {' '}({p.numerator}/{p.denominator})
-                  </span>
-                )}
-              </b>
-            </div>
-          ))}
+          {tile.parts.map((p) => {
+            // The trends tile's parts ARE reason codes, so a part whose label
+            // the vocabulary knows gets its gloss. Looked up rather than
+            // switched on the tile key: any tile that starts emitting reason
+            // codes as parts is explained for free, and one that never does
+            // simply never matches.
+            const code = reasonCodes?.[p.label]
+            return (
+              <div className="tile-part" key={p.label}>
+                <span>
+                  {p.label}
+                  {code?.direction === 'mitigating' && (
+                    <span className="chip mitigating" title="argues for the customer">
+                      mitigating
+                    </span>
+                  )}
+                  {code?.direction === 'veto' && (
+                    <span className="chip mitigating" title="capped the action">veto</span>
+                  )}
+                  {code?.description && (
+                    <div className="tiny dim">{code.description}</div>
+                  )}
+                </span>
+                <b>
+                  {p.value === null || p.value === undefined ? '—' : format(String(p.value), p.unit)}
+                  {p.numerator !== null && p.numerator !== undefined
+                    && p.denominator !== null && p.denominator !== undefined && (
+                    <span className="dim" style={{ fontWeight: 400 }}>
+                      {' '}({p.numerator}/{p.denominator})
+                    </span>
+                  )}
+                </b>
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -58,16 +86,42 @@ export function TileView({ tile }: { tile: KpiTile }) {
         <div>
           {whenShort(tile.window_start)} → {whenShort(tile.window_end)}
         </div>
-        <div>{tile.basis}</div>
+        <Explanation tile={tile} />
         {tile.synthetic && (
           <div className="tile-caveat">
-            ⚠ synthetic — {tile.caveat ?? 'this number was produced by the fixtures, not observed'}
+            ⚠ synthetic — {plainCaveat(tile.caveat)
+              ?? 'this number was produced by the fixtures, not observed'}
           </div>
         )}
-        {!tile.synthetic && tile.caveat && <div className="tile-caveat">⚠ {tile.caveat}</div>}
-        <div className="dim">requires {tile.requires}</div>
+        {!tile.synthetic && tile.caveat && (
+          <div className="tile-caveat">⚠ {plainCaveat(tile.caveat)}</div>
+        )}
+        {/* `requires` is deliberately not rendered. It names the internal
+            milestone that made the tile computable — "§9 dedup + §10 population
+            scoring; the denominator is decisions.alert_routing, which did not
+            exist before 0023" — which is archaeology to everyone who has not
+            read the plan. It stays ON THE WIRE: it is part of kpis.v1, and
+            removing a published field to tidy a screen is a contract change. */}
       </div>
     </div>
+  )
+}
+
+/**
+ * What the tile means and how it was computed — two short lines where the
+ * payload's `basis` was one long one.
+ *
+ * Falls back to `basis` for any tile `copy/tiles.ts` has not been taught, so a
+ * tile added server-side arrives explaining itself rather than silent.
+ */
+function Explanation({ tile }: { tile: KpiTile }) {
+  const copy = TILE_COPY[tile.key]
+  if (!copy) return <div>{tile.basis}</div>
+  return (
+    <>
+      <div className="tile-means">{copy.means}</div>
+      <div className="dim">{copy.computed}</div>
+    </>
   )
 }
 

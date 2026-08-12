@@ -44,7 +44,7 @@ from glassbox.rules.publish import (
 ANALYST = {"Authorization": "Bearer analyst-token"}
 ADMIN = {"Authorization": "Bearer admin-token"}
 
-ADMIN_ACTOR = "omar.admin"
+ADMIN_ACTOR = "joe.admin"
 
 
 def draft(rule_id: str = "P-901", **overrides) -> RuleDraft:

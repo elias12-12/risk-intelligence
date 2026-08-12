@@ -51,6 +51,7 @@ export type ConditionView = S['ConditionView']
 export type ConditionPerformance = S['ConditionPerformance']
 export type FeatureView = S['FeatureView']
 export type ReferenceVocabulary = S['ReferenceVocabulary']
+export type ReasonCodeValue = S['ReasonCodeValue']
 export type RuleDraft = S['RuleDraft']
 export type ConditionDraft = S['ConditionDraft']
 
@@ -69,6 +70,7 @@ export type AuthorizationRequest = S['AuthorizationRequest']
 export type AuthorizationOutcome = S['AuthorizationOutcome']
 export type ExecutionIssued = S['ExecutionIssued']
 export type CycleReport = S['CycleReport']
+export type RescoreReport = S['RescoreReport']
 export type IngestReceipt = S['IngestReceipt']
 
 /**

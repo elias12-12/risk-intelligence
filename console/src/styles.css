@@ -277,6 +277,20 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-fam
 .tile-delta.down { color: var(--mit); }
 .tile-foot { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line-soft); font-size: 11px; color: var(--dim); display: flex; flex-direction: column; gap: 5px; }
 .tile-caveat { color: var(--band-elevated); }
+/* What the tile MEANS, one step brighter than how it was computed — the
+   definition is the line an audience needs and the arithmetic is the line that
+   proves it. */
+.tile-means { color: var(--text); }
+/* A mitigating reason code, marked. An audience that sees only aggravating
+   codes concludes the system only argues one way. */
+.chip.mitigating { background: transparent; border-color: var(--band-low); color: var(--band-low); margin-left: 6px; }
+/* A performance row measured on too few evaluations to mean anything. Dimmed
+   rather than hidden: the row is real, the rate computed from it is not. */
+.thin-sample { opacity: 0.55; }
+/* The one column that moves between the charges of a burst. Marked so the
+   audience can see that everything else is identical — which is the argument
+   that the fifth charge was not special. */
+td.changing { color: var(--band-elevated); }
 .tile-parts { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .tile-part { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); }
 .tile-part b { color: var(--text); font-family: var(--mono); font-weight: 600; }

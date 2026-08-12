@@ -39,6 +39,7 @@ from glassbox.contract.ingest import (           # noqa: E402
     AuthorizationOutcome,
     CycleReport,
     IngestReceipt,
+    RescoreReport,
 )
 from glassbox.contract.kpis import KpiSet, KpiTile  # noqa: E402
 from glassbox.contract.models import AlertDetail, AlertSummary  # noqa: E402
@@ -70,7 +71,7 @@ CONTRACTS: dict[str, tuple[str, tuple[type, ...]]] = {
     "catalog.v1": ("GlassBox control-plane contract, version 1",
                    (RuleSummary, RuleDetail, FeatureView, ReferenceVocabulary)),
     "ingest.v1": ("GlassBox arrival contract, version 1",
-                  (AuthorizationOutcome, IngestReceipt, CycleReport)),
+                  (AuthorizationOutcome, IngestReceipt, CycleReport, RescoreReport)),
 }
 
 

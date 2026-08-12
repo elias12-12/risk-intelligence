@@ -23,13 +23,22 @@
 -- fraud-labelled subjects, so no challenge passes and nothing is dispositioned
 -- legitimate. The join works; it has nothing to find. test_execution.py
 -- exercises it on a constructed case rather than pretending otherwise.
+--
+-- SESSION 6: THE VERDICT IS THE LATEST DISPOSITION. This CTE is a copy of
+-- v_kpi_cases', and it kept `ORDER BY decided_at, outcome_id` when Week 5 moved
+-- the original to latest-wins. Prevention FP/TP therefore answered off the
+-- synthetic settler's verdict forever, while the false-positive tile two rows up
+-- the same screen answered off the analyst's correction. See
+-- v_kpi_rule_attribution.sql for the three-case evidence; the fix is this one
+-- clause, in the three views that had copied the old one.
 -- =====================================================================
 DROP VIEW IF EXISTS v_kpi_executions;
 
 CREATE VIEW v_kpi_executions AS
 WITH verdict AS (
     SELECT alert_id,
-           (array_agg(disposition ORDER BY decided_at, outcome_id))[1] AS disposition
+           (array_agg(disposition ORDER BY decided_at DESC, outcome_id DESC))[1]
+               AS disposition
       FROM case_outcomes
      GROUP BY alert_id
 )

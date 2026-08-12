@@ -29,6 +29,19 @@ from ..types import ActionOutcome, Rule, RuleScore, Signal
 MONITOR = "monitor"
 ALLOW = "allow"
 
+# The two reason codes this module emits, and the direction it emits them with.
+#
+# Named rather than inline because they are the answer to a question asked
+# elsewhere: no `rule_conditions` row cites either of these, so a catalog trying
+# to say whether a reason code argues for or against a customer cannot find them
+# by looking at what rules price. `contract/catalog.py` reads these constants for
+# exactly that, and a third reason code emitted here has to be added to this
+# tuple to be classifiable — which is the intended amount of friction.
+VETO_DIRECTION = "veto"
+VETO_REASON_CODE = "VETO_APPLIED"
+DEGRADED_REASON_CODE = "DEGRADED_EVIDENCE"
+VETO_EMITTED_REASON_CODES: tuple[str, ...] = (VETO_REASON_CODE, DEGRADED_REASON_CODE)
+
 
 def decide(rule_scores: list[RuleScore], rules: dict[str, Rule],
            severity: dict[str, tuple[int, bool]]) -> ActionOutcome:
@@ -46,19 +59,19 @@ def decide(rule_scores: list[RuleScore], rules: dict[str, Rule],
             veto_cap = severity[MONITOR][0]
             vetoed_by = rule.rule_id
             veto_signals.append(Signal(
-                feature_key=None, contribution=Decimal(0), direction="veto",
+                feature_key=None, contribution=Decimal(0), direction=VETO_DIRECTION,
                 human_text=(rule.recommended_action_text
                             or f"{rule.rule_id} established exonerating evidence"),
-                reason_code="VETO_APPLIED", source_rule_id=rule.rule_id,
+                reason_code=VETO_REASON_CODE, source_rule_id=rule.rule_id,
                 asserted_by_rules=[rule.rule_id]))
         elif established is None:
             veto_cap = severity[MONITOR][0]
             veto_signals.append(Signal(
-                feature_key=None, contribution=Decimal(0), direction="veto",
+                feature_key=None, contribution=Decimal(0), direction=VETO_DIRECTION,
                 human_text=(f"{rule.rule_id} could not be established: "
                             f"{', '.join(rs.evaluation.degraded) or 'evidence missing'}. "
                             f"Severity is capped until the evidence is available."),
-                reason_code="DEGRADED_EVIDENCE", source_rule_id=rule.rule_id,
+                reason_code=DEGRADED_REASON_CODE, source_rule_id=rule.rule_id,
                 asserted_by_rules=[rule.rule_id]))
 
     # ---- 1. authority --------------------------------------------------

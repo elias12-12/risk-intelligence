@@ -69,6 +69,20 @@ describe('the endpoint that commits has one call site', () => {
     expect(containing('api.authorize(')).toEqual(['screens/Authorize.tsx'])
   })
 
+  it('three scenarios share the single call site', () => {
+    // §13 added two scenarios to the authorize screen. The constraint is not
+    // "one scenario" — it is one CALLER, so a scenario picker is fine and a
+    // second file that authorizes a charge is not. Counted rather than merely
+    // located, because `containing()` above would pass with three calls in one
+    // file and three is where a copy-paste starts.
+    const [, authorize] = FILES.find(([name]) => name === 'screens/Authorize.tsx')!
+    expect(authorize.match(/api\.authorize\(/g)).toHaveLength(1)
+    // The picker exists and offers exactly the three the plan signed off.
+    expect(authorize).toMatch(/key: 'burst'/)
+    expect(authorize).toMatch(/key: 'veto'/)
+    expect(authorize).toMatch(/key: 'quiet'/)
+  })
+
   it('the simulator never calls it', () => {
     const [, simulate] = FILES.find(([name]) => name === 'screens/Simulate.tsx')!
     expect(simulate).not.toContain('api.authorize')
@@ -124,6 +138,29 @@ describe('no console copy outruns the system', () => {
         expect(pattern.test(text), `${name}: ${why}`).toBe(false)
       }
     }
+  })
+})
+
+describe('re-scoring the population is a separate, admin-only verb', () => {
+  it('only the rules screen offers it', () => {
+    // The same argument as `/authorize` above, one step weaker: a re-score
+    // cannot decline a charge, but it writes decisions and can raise cases, and
+    // it is the control a demo reaches for under pressure. One call site.
+    expect(containing('api.rescore(')).toEqual(['screens/Rules.tsx'])
+  })
+
+  it('is behind an admin check', () => {
+    const [, rules] = FILES.find(([name]) => name === 'screens/Rules.tsx')!
+    expect(rules).toMatch(/can\('admin'\) && <RescoreControl/)
+  })
+
+  it('does not conflate itself with the cycle', () => {
+    // `POST /cycle` consumes what arrived; `POST /cycle/rescore` ignores
+    // watermarks entirely. If the client ever routes one through the other the
+    // distinction §1 exists to draw has been erased.
+    const [, client] = FILES.find(([name]) => name === 'api/client.ts')!
+    expect(client).toMatch(/runCycle: \(\) => post<CycleReport>\('\/cycle', \{\}\)/)
+    expect(client).toMatch(/post<RescoreReport>\(`\/cycle\/rescore\?lane=\$\{lane\}`/)
   })
 })
 
