@@ -83,6 +83,23 @@ p:last-child { margin-bottom: 0; }
 /* ---------------------------------------------------------------- shell */
 
 .shell { display: flex; flex-direction: column; min-height: 100%; }
+main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+/* Visible only when focused. First stop in the tab order. */
+.skip {
+  position: absolute; left: 8px; top: -60px; z-index: 40;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  background: var(--accent); color: #06121f; font-weight: 650; font-size: 13px;
+}
+.skip:focus { top: 8px; text-decoration: none; }
+
+/* For a table caption or a heading that a screen reader needs and a sighted
+   reader already has from context. Clipped, never `display: none` — the latter
+   removes it from the accessibility tree too, which defeats the point. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 
 .topbar {
   display: flex; align-items: center; gap: 20px;
@@ -102,7 +119,14 @@ p:last-child { margin-bottom: 0; }
 }
 .nav a:hover { background: var(--panel-2); color: var(--text); text-decoration: none; }
 .nav a.on { background: var(--accent-soft); color: var(--accent); }
-.nav a.admin::after {
+.nav-write { display: flex; gap: 2px; padding-left: 14px; border-left: 1px solid var(--line); }
+.nav-write a {
+  padding: 6px 11px; border-radius: var(--radius-sm);
+  color: var(--muted); font-size: 13px; font-weight: 500;
+}
+.nav-write a:hover { background: var(--panel-2); color: var(--text); text-decoration: none; }
+.nav-write a.on { background: var(--accent-soft); color: var(--accent); }
+.nav a.admin::after, .nav-write a.admin::after {
   content: 'admin'; margin-left: 6px; font-size: 9px; letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--dim); vertical-align: 1px;
 }
@@ -177,13 +201,30 @@ button.small { padding: 4px 9px; font-size: 12px; }
 
 /* ---------------------------------------------------------------- forms */
 
+/*
+  The form-label voice — small, uppercase, above its control. It used to be on
+  bare `label`, which meant every label anywhere got it, including the ones
+  sitting INLINE beside a control in a toolbar, where uppercase 11px reads as a
+  heading for the thing after it rather than a name for the thing beside it.
+  Two opt-outs, `.inline` and `.plain`, rather than one blanket rule and a pile
+  of per-site overrides.
+*/
 label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+label.inline { display: inline-block; margin: 0; white-space: nowrap; }
+label.plain { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--text); font-weight: 400; }
+select.compact, input.compact { width: auto; min-width: 0; padding: 5px 8px; font-size: 12px; }
 input, select, textarea {
   font: inherit; font-size: 13px; width: 100%;
   padding: 7px 10px; border-radius: var(--radius-sm);
   border: 1px solid var(--line); background: var(--bg); color: var(--text);
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+/* Every other interactive thing. The console is a keyboard surface and half of
+   it was reachable with no visible indication of where you were. */
+a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm);
+}
+main:focus { outline: none; }
 textarea { min-height: 68px; resize: vertical; }
 .field { min-width: 0; }
 .fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
@@ -342,3 +383,128 @@ pre.md {
 
 .split { display: grid; gap: 14px; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; }
 @media (max-width: 940px) { .split { grid-template-columns: 1fr; } }
+
+/* ---------------------------------------------------------------- dashboard */
+
+/*
+  The headline strip. Four cells, above everything, and every figure in it is
+  the same code reading the same payload field as the tile it came from — see
+  components/HeadlineStrip.tsx for why that is the thing keeping it honest.
+*/
+.headline {
+  display: grid; gap: 1px; margin-bottom: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  background: var(--line); border: 1px solid var(--line);
+  border-radius: var(--radius); overflow: hidden;
+}
+.headline-cell {
+  background: var(--panel); padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 3px; min-width: 0;
+}
+.headline-cell.as-button {
+  border: none; border-radius: 0; text-align: left; font: inherit;
+  color: inherit; cursor: pointer;
+}
+.headline-cell.as-button:hover { background: var(--panel-2); }
+.headline-label {
+  display: block;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); font-weight: 600;
+}
+.headline-cell > span { display: block; }
+.headline-value {
+  display: block;
+  font-size: 26px; font-weight: 650; letter-spacing: -0.03em;
+  font-family: var(--mono); line-height: 1.1; color: var(--text);
+}
+
+/* The sub-tabs. Deliberately a different shape from the top-level nav — an
+   underline rather than a pill — because two identical-looking rows of tabs one
+   above the other is a hierarchy nobody can read. */
+.subtabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.subtabs a {
+  padding: 8px 14px; font-size: 13px; font-weight: 550; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.subtabs a:hover { color: var(--text); text-decoration: none; }
+.subtabs a.on { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* A panel whose own children own their padding — the queue table runs to the
+   panel's edge, its head and toolbar do not. */
+.panel.flush { padding: 0; overflow: hidden; }
+.panel.flush .panel-head { margin-bottom: 0; }
+.padded { padding: 14px 16px; }
+.measure { max-width: 74ch; margin: 2px 0 0; }
+
+.filterbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 16px; background: var(--panel-2);
+  border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft);
+}
+.filterbar .grow { flex: 1; }
+.filterbar .checkline { gap: 6px; }
+
+/* ------------------------------------------------------------- queue table */
+
+.queue-table td { vertical-align: top; }
+.queue-table .why { margin-top: 4px; font-size: 11px; padding: 2px 7px; }
+.why-row td { background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.why-body { display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
+.why-body .mono { font-family: var(--mono); color: var(--muted); }
+.why-body b { color: var(--text); }
+
+/*
+  Below 820px the queue stops being a table and becomes a stack of cards, from
+  the SAME DOM: the cells carry `data-label` and the stylesheet promotes it to a
+  row heading. Rendering a second copy of every row for narrow screens would be
+  a second place the queue is written, and the two would agree until the day a
+  column changed.
+*/
+@media (max-width: 820px) {
+  .queue-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .queue-table, .queue-table tbody, .queue-table tr, .queue-table td { display: block; width: 100%; }
+  .queue-table tr {
+    border: 1px solid var(--line); border-radius: var(--radius);
+    margin: 10px 12px; background: var(--panel-2); overflow: hidden;
+  }
+  .queue-table td {
+    display: grid; grid-template-columns: 96px 1fr; gap: 12px;
+    padding: 7px 12px; border-bottom: 1px solid var(--line-soft); text-align: left;
+  }
+  .queue-table td::before {
+    content: attr(data-label);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--dim); font-weight: 600;
+  }
+  .queue-table td.num { text-align: left; font-family: inherit; }
+  .queue-table td.num b { font-family: var(--mono); }
+  .queue-table tr:last-child td:last-child { border-bottom: none; }
+  .queue-table .why-row td { grid-template-columns: 1fr; }
+  .queue-table .why-row td::before { content: none; }
+  .scroll-x { overflow-x: visible; }
+}
+
+/* ------------------------------------------------------ tile groups + detail */
+
+.tile-group { display: flex; flex-direction: column; gap: 10px; }
+.tile-group-head { display: flex; flex-direction: column; gap: 1px; }
+.tile-group-head h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); }
+.tile-group-head p { margin: 0; max-width: 74ch; }
+
+/* The folded half of a tile. The caveat is NOT in here — see Tile.tsx. */
+.tile-detail summary,
+.note-detail summary {
+  cursor: pointer; color: var(--muted); font-size: 11px;
+  list-style: none; display: inline-flex; align-items: center; gap: 5px;
+}
+.tile-detail summary::-webkit-details-marker,
+.note-detail summary::-webkit-details-marker { display: none; }
+.tile-detail summary::before,
+.note-detail summary::before { content: '▸'; font-size: 9px; color: var(--dim); }
+.tile-detail[open] > summary::before,
+.note-detail[open] > summary::before { content: '▾'; }
+.tile-detail summary:hover, .note-detail summary:hover { color: var(--text); }
+.tile-detail-body { display: flex; flex-direction: column; gap: 5px; padding-top: 6px; }
+.note-detail { margin-top: 8px; }
+.note-detail summary { font-size: 12px; }
+.note-detail ul { margin: 8px 0 0 18px; }

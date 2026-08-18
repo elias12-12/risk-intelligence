@@ -14,6 +14,18 @@
  * window, `KpiSet.baseline_available` is false and the payload carries
  * `baseline_absent_reason` — which is printed, because "−41%" against nothing is
  * the one kind of KPI that is worse than no KPI.
+ *
+ * WHAT IS FOLDED AWAY, AND WHAT IS NOT. Nine tiles each carrying a definition,
+ * an arithmetic note and a window is a wall of prose, and a wall of prose is
+ * read by nobody — which costs the transparency it was written for. So the
+ * explanation and the window sit behind a `<details>`, closed by default.
+ *
+ * The CAVEAT does not. A caveat is the tile saying the number is not what it
+ * looks like — "we planted this fraud", "a script wrote these verdicts" — and a
+ * disclosure a reader has to open is a disclosure most readers never see.
+ * Folding the definition away is a density decision; folding the caveat away
+ * would be an honesty one. Same for the value, the delta and the denominator: a
+ * rate is never shown without what it was computed over.
  */
 import { duration, when, whenShort } from '../format'
 import type { KpiSet, KpiTile, ReasonCodeValue } from '../api/types'
@@ -83,10 +95,8 @@ export function TileView({ tile, reasonCodes }: {
       )}
 
       <div className="tile-foot">
-        <div>
-          {whenShort(tile.window_start)} → {whenShort(tile.window_end)}
-        </div>
-        <Explanation tile={tile} />
+        {/* Out front, always. See the header: a caveat behind a disclosure is a
+            caveat most readers never open. */}
         {tile.synthetic && (
           <div className="tile-caveat">
             ⚠ synthetic — {plainCaveat(tile.caveat)
@@ -96,6 +106,19 @@ export function TileView({ tile, reasonCodes }: {
         {!tile.synthetic && tile.caveat && (
           <div className="tile-caveat">⚠ {plainCaveat(tile.caveat)}</div>
         )}
+
+        {/* Folded, because it is the same shape on all nine and reads as a wall
+            when nine of them are on screen at once. Still in the DOM, still
+            findable, one click away. */}
+        <details className="tile-detail">
+          <summary>what this measures</summary>
+          <div className="tile-detail-body">
+            <Explanation tile={tile} />
+            <div className="dim">
+              {whenShort(tile.window_start)} → {whenShort(tile.window_end)}
+            </div>
+          </div>
+        </details>
         {/* `requires` is deliberately not rendered. It names the internal
             milestone that made the tile computable — "§9 dedup + §10 population
             scoring; the denominator is decisions.alert_routing, which did not
@@ -132,7 +155,7 @@ function Value({ tile }: { tile: KpiTile }) {
   return <div className="tile-value">{format(String(tile.value), tile.unit)}</div>
 }
 
-function format(value: string, unit: string): string {
+export function format(value: string, unit: string): string {
   const n = Number(value)
   if (unit === 'percent') return `${trim(n)}%`
   if (unit === 'seconds') return duration(n)
@@ -148,7 +171,7 @@ function trim(n: number): string {
  * A delta, or an explicit statement that there is no baseline to compare with.
  * Never a bare percentage.
  */
-function Delta({ tile }: { tile: KpiTile }) {
+export function Delta({ tile }: { tile: KpiTile }) {
   if (tile.delta_pct === null || tile.delta_pct === undefined) {
     return <span className="tiny dim">no prior window</span>
   }

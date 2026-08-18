@@ -95,6 +95,41 @@ describe('KPI tiles', () => {
     expect(screen.getByText(/synthetic/)).toBeInTheDocument()
   })
 
+  it('never folds a caveat away, even though it folds the definition', () => {
+    // Session 6 §6 again, one step on. Nine tiles each carrying a definition,
+    // an arithmetic note and a window is a wall of prose nobody reads, so those
+    // three sit behind a <details>. A caveat is the tile saying the number is
+    // not what it looks like, and a disclosure a reader has to open is a
+    // disclosure most readers never see. Density decision vs honesty decision.
+    const { container } = render(<TileView tile={tile({ synthetic: true })} />)
+
+    const caveat = container.querySelector('.tile-caveat')
+    expect(caveat).not.toBeNull()
+    expect(caveat!.closest('details')).toBeNull()
+
+    // ...and the thing that IS folded is genuinely folded, closed by default.
+    const details = container.querySelector('details')
+    expect(details).not.toBeNull()
+    expect(details!.hasAttribute('open')).toBe(false)
+    expect(details!.textContent).toContain(TILE_COPY.false_negative_rate.means)
+  })
+
+  it('keeps the value, the delta and the denominator out front', () => {
+    // A rate is never shown without what it was computed over, and a delta is
+    // never shown without the baseline that produced it. Neither may go behind
+    // a click.
+    const { container } = render(<TileView tile={tile({
+      delta_pct: '-41',
+      baseline_start: '2026-01-01T15:00:00Z',
+      baseline_end: '2026-01-08T15:00:00Z',
+    })} />)
+    for (const sel of ['.tile-value', '.tile-denominator', '.tile-delta']) {
+      const el = container.querySelector(sel)
+      expect(el, sel).not.toBeNull()
+      expect(el!.closest('details'), sel).toBeNull()
+    }
+  })
+
   it('refuses to imply a prior period when there is no baseline', () => {
     // §11's "console copy that outruns the system": deltas implying a measured
     // prior period. A delta renders only when delta_pct is non-null.

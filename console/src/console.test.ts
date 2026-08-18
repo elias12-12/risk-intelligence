@@ -185,3 +185,68 @@ describe('payload shapes are never redeclared', () => {
     expect(declared).toEqual(['export interface CycleState', 'export interface Principal'])
   })
 })
+
+describe('the dashboard holds one set of figures, not two', () => {
+  it('there is exactly one hold-it-back mechanism', () => {
+    // O5's rule — nothing on screen moves unless a person asked — was written
+    // for the queue and now covers the tiles too, because a cycle tick
+    // invalidates both. One implementation, or the two surfaces drift apart the
+    // first time one of them is changed.
+    expect(containing('seenFrontier')).toEqual(['useHeld.ts'])
+  })
+
+  it('one banner promotes both payloads at once', () => {
+    // Two banners would let a reader accept the new queue and keep the old
+    // tiles, and nothing on screen would say the two were computed at different
+    // moments. The accept is a single click in a single file.
+    expect(containing(/\.accept\(\)/)).toEqual(['screens/Dashboard.tsx'])
+  })
+
+  it('announces the change it did not make', () => {
+    // A change nobody triggered is exactly the change a screen-reader user has
+    // no other way to learn about.
+    const [, dashboard] = FILES.find(([name]) => name === 'screens/Dashboard.tsx')!
+    expect(dashboard).toContain('aria-live="polite"')
+  })
+})
+
+describe('the queue narrows, and never reorders', () => {
+  it('does not sort the rows it was given', () => {
+    // `queue.py` publishes `priority = score × exposure × recency` AND the
+    // factors, so the order can be checked. A column header that resorted it
+    // would be the console overriding a published, explained order with an
+    // unexplained one of its own — on the single screen whose claim is that the
+    // order is the server's.
+    const [, queue] = FILES.find(([name]) => name === 'screens/Queue.tsx')!
+    expect(queue).not.toMatch(/\.sort\(/)
+    expect(queue).toContain('filtered, not reordered')
+  })
+
+  it('offers only the values actually in the payload', () => {
+    // A written-down list of bands would offer one the payload stopped using
+    // and hide one it started. Same argument as the reason-code vocabulary.
+    const [, queue] = FILES.find(([name]) => name === 'screens/Queue.tsx')!
+    expect(queue).toMatch(/distinct\(all\?\.map/)
+  })
+})
+
+describe('a headline figure is the tile figure', () => {
+  it('formats through the tile, rather than reimplementing it', () => {
+    // The strip restates numbers that are also on the measurement tab. What
+    // keeps that honest is that it is the SAME code reading the same field: one
+    // value formatter, one delta component, both imported.
+    const [, strip] = FILES.find(([name]) => name === 'components/HeadlineStrip.tsx')!
+    expect(strip).toMatch(/import \{ Delta, format \} from '\.\/Tile'/)
+  })
+
+  it('has exactly one KPI value formatter', () => {
+    expect(containing("unit === 'percent'")).toEqual(['components/Tile.tsx'])
+  })
+
+  it('carries the synthetic mark onto the headline', () => {
+    // A headline figure is the one most likely to be read off a slide, so it is
+    // the last place a "⚠ synthetic" may be dropped for space.
+    const [, strip] = FILES.find(([name]) => name === 'components/HeadlineStrip.tsx')!
+    expect(strip).toMatch(/t\.synthetic &&/)
+  })
+})

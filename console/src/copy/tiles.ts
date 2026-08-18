@@ -29,6 +29,8 @@
  *     note WITH its counts — see below.
  */
 
+import type { KpiTile } from '../api/types'
+
 /** What the tile means, and how the number was arrived at. */
 export interface TileCopy {
   means: string
@@ -130,4 +132,96 @@ export function plainCaveat(caveat: string | null | undefined): string | null {
     out = out.replace(pattern, replacement)
   }
   return out.trim()
+}
+
+// ---------------------------------------------------------------- grouping
+
+/**
+ * The nine tiles, filed under what they are for.
+ *
+ * A flat grid of nine tiles makes nine equally-weighted claims and leaves the
+ * reader to work out which two are about the same thing. Grouping is the same
+ * exception this file already names — words the console writes about a number,
+ * never a number — and it keeps the same three rules. In particular RULE 1: the
+ * map is keyed on `tile.key` and a tile it has never heard of does not vanish,
+ * it lands in `OTHER` and renders in full. A tenth tile added server-side
+ * arrives on screen the day it ships, filed under "not yet categorised", which
+ * is honest about what the console knows rather than silent.
+ *
+ * The order below is the order the sections render in, and it is an argument:
+ * what the engine produced, then whether it was right, then what it cost a
+ * person, then what it did to a customer. A reader who stops after the second
+ * section has still read the two that decide whether any of it was worth doing.
+ */
+export interface TileGroup {
+  key: string
+  label: string
+  /** The question this section answers, in one line. */
+  answers: string
+}
+
+export const TILE_GROUPS: TileGroup[] = [
+  {
+    key: 'output',
+    label: 'Detection output',
+    answers: 'How much the engine raised, out of how much it looked at.',
+  },
+  {
+    key: 'accuracy',
+    label: 'Are we right?',
+    answers: 'Of what we raised, how much was worth raising — and what we missed.',
+  },
+  {
+    key: 'work',
+    label: 'Analyst work',
+    answers: 'How long a case waits for a person, and what people concluded.',
+  },
+  {
+    key: 'impact',
+    label: 'Customer impact and emerging risk',
+    answers: 'What we did to a customer, and which patterns are moving.',
+  },
+]
+
+/** Where a tile this file has never heard of goes. Never hidden. */
+export const OTHER_GROUP: TileGroup = {
+  key: 'other',
+  label: 'Not yet categorised',
+  answers: 'Tiles this console has not been taught to file. They render in full, '
+    + 'explained by their own payload.',
+}
+
+const GROUP_OF: Record<string, string> = {
+  alert_volume: 'output',
+  score_distribution: 'output',
+
+  false_positive_rate: 'accuracy',
+  false_negative_rate: 'accuracy',
+  rule_precision: 'accuracy',
+
+  median_triage_time: 'work',
+  validation_outcomes: 'work',
+
+  action_rates: 'impact',
+  emerging_trends: 'impact',
+}
+
+export interface GroupedTiles {
+  group: TileGroup
+  tiles: KpiTile[]
+}
+
+/**
+ * The payload's tiles, in sections. Preserves the server's order WITHIN each
+ * section and drops nothing: every tile handed in comes back out exactly once,
+ * and a group with no tiles in this payload is not rendered at all.
+ */
+export function groupTiles(tiles: KpiTile[]): GroupedTiles[] {
+  const out: GroupedTiles[] = []
+  for (const group of [...TILE_GROUPS, OTHER_GROUP]) {
+    const mine = tiles.filter((t) =>
+      (GROUP_OF[t.key] ?? OTHER_GROUP.key) === group.key)
+    if (mine.length > 0) out.push({ group, tiles: mine })
+  }
+  return out
 }
